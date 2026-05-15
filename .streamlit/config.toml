@@ -1,0 +1,12 @@
+[server]
+# 禁用静态文件服务，阻止访问 .env, .git 等敏感文件
+enableStaticServing = false
+
+# 关闭 CORS
+enableCORS = false
+
+# 开启 XSRF 保护
+enableXsrfProtection = true
+
+[browser]
+gatherUsageStats = false

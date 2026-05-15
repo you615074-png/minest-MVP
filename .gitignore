@@ -1,0 +1,32 @@
+# ── 敏感密钥 ──
+.env
+*.pem
+
+# ── 数据库 ──
+*.db
+*.sqlite
+*.sqlite3
+
+# ── Python ──
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# ── 系统文件 ──
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── IDE ──
+.vscode/
+.idea/
+
+# ── 日志 ──
+*.log
+
+# ── Nginx 生成的配置 ──
+security_nginx.conf
