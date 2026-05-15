@@ -140,9 +140,6 @@ ANALYZER_PROVIDER=deepseek
 PROCESSOR_PROVIDER=kimi
 SCORER_PROVIDER=deepseek
 COPYWRITER_PROVIDER=minimax
-
-# === 安全配置 ===
-PASSWORD_SALT=           # 密码加密盐值，请填写一段随机字符串
 ```
 
 > ⚠️ **安全提示**：`.env` 文件包含敏感密钥，已被 `.gitignore` 保护，**切勿提交到 Git 仓库**。
@@ -153,8 +150,9 @@ PASSWORD_SALT=           # 密码加密盐值，请填写一段随机字符串
 
 ```
 minest MVP/
-├── app.py                    # Streamlit 主界面（含登录、双栏布局、流式执行）
+├── app.py                    # Streamlit 应用入口（纯编排层，~180行）
 ├── requirements.txt          # Python 依赖
+├── pytest.ini                # 测试配置
 ├── start_secure.bat          # HTTPS 安全启动脚本
 ├── .env                      # API Keys（⚠️ 不提交 Git）
 ├── .env.example              # Keys 模板（不含真实密钥）
@@ -164,16 +162,33 @@ minest MVP/
 │   ├── state.py              # LangGraph 共享状态定义
 │   ├── graph.py              # 图构建与条件路由（SDR / 市场分析双轨）
 │   └── agents/
-│       ├── researcher.py     # 🕵️ 情报挖掘官（Jina + Tavily）
+│       ├── researcher.py     # 🕵️ 情报挖掘官（Jina + Tavily，含重试机制）
 │       ├── processor.py      # ⚙️ 数据处理器（Pydantic 结构化输出）
 │       ├── scorer.py         # 📊 商机打分员
 │       ├── copywriter.py     # ✍️ 破冰文案专家
 │       └── market_analyzer.py# 🧠 市场分析专家（受众推演 + 客户推荐）
 │
+├── ui/                       # 🆕 界面层（543行 app.py 拆分）
+│   ├── styles.py             # CSS 常量与主题
+│   ├── components.py         # 可复用 UI 组件（终端盒子、卡片、标签）
+│   ├── session.py            # Session State 初始化 & 管理
+│   ├── auth_ui.py            # 登录/注册弹窗
+│   ├── workflow.py           # 工作流执行引擎（流式 + 批量）
+│   └── renderer.py           # 结果展示渲染器
+│
 ├── utils/
 │   ├── helpers.py            # LLM 客户端工厂（多模型分发 + 温度控制）
-│   ├── db.py                 # SQLite 数据库管理（用户表 + 历史记录表）
-│   └── auth.py               # 用户认证模块（注册 / 登录 / 防暴力破解）
+│   ├── db.py                 # SQLite 数据库（WAL 模式 + 连接管理器）
+│   ├── auth.py               # 用户认证模块（bcrypt 哈希 + 防暴力破解）
+│   └── retry.py              # 🆕 指数退避重试装饰器
+│
+├── tests/                    # 🆕 单元测试
+│   ├── conftest.py           # 共享 fixtures
+│   ├── test_auth.py          # bcrypt 哈希、注册、登录、锁定
+│   ├── test_db.py            # 数据库 CRUD、历史裁剪
+│   ├── test_helpers.py       # LLM 工厂、温度控制
+│   ├── test_retry.py         # 重试装饰器
+│   └── test_state.py         # AgentState 字段完整性
 │
 ├── static/
 │   └── robots.txt            # 搜索引擎爬虫拦截
@@ -189,9 +204,11 @@ minest MVP/
 | 防御项 | 实现方式 |
 |---|---|
 | 防暴力破解 | 连续 5 次密码错误 → 账户锁定 15 分钟 |
-| 密码加密 | SHA-256 加盐哈希，盐值通过环境变量管理 |
+| 密码加密 | bcrypt 哈希（内置随机盐，12轮迭代） |
+| 数据库安全 | SQLite WAL 模式，连接上下文管理器防止泄露 |
 | 数据隔离 | 不同用户的历史记录通过 `user_id` 外键严格隔离 |
 | 前端脱敏 | 异常信息过滤 API Key 碎片，截断长堆栈 |
+| API 重试 | 指数退避装饰器，自动重试网络异常（HTTP/Tavily） |
 | 反爬虫 | `robots.txt` 全站 Disallow |
 | 跨域防护 | 关闭 CORS + 开启 XSRF 保护 |
 | HTTPS 支持 | `start_secure.bat` 自动签发证书并加密启动 |
@@ -219,4 +236,5 @@ minest MVP/
 - ✅ **左边栏历史回溯**：侧边栏直出历史记录清单，点击即秒开过往详情。
 - ✅ **双栏独立滚动视图**：左侧输入区与右侧结果区彻底解耦，互不滚动干扰，告别传统单页瀑布流的痛点。
 - ✅ **流式实时终端反馈**：AI Agent 每一步执行细节实时刷新，拒绝死板的黑屏等待。
-- ✅ **金融级安全加固**：内建防暴力破解锁定机制、密码 SHA-256 加盐防脱库、前端脱敏防泄漏，并附带基于 OpenSSL 的自签名 HTTPS 启动脚本。
+- ✅ **金融级安全加固**：内建防暴力破解锁定机制、bcrypt 密码哈希、前端脱敏防泄漏，并附带基于 OpenSSL 的自签名 HTTPS 启动脚本。
+- ✅ **运行测试**：`python -m pytest tests -v`，34 个单元测试覆盖认证、数据库、LLM 工厂、重试机制
