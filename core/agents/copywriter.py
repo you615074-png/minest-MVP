@@ -55,16 +55,20 @@ def copywriter_node(state: AgentState) -> AgentState:
 """
 
         result: EmailDraft = invoke_structured(llm, prompt, EmailDraft)
+        company = profile.get("company_name", "贵司")
 
         body = result.body
-        if not body or len(body) < 10:
+        if not body or len(body.strip()) < 10:
             hooks = state.get("key_hooks", [])
-            company = profile.get("company_name", "贵司")
             body = (
-                f"关注到{company}近期动态，我司产品在{', '.join(hooks[:2]) if hooks else '团队协作'}领域"
-                f"可提供针对性方案。方便约15分钟快速沟通吗？"
+                f"关注到{company}近期发展动态，我司产品在"
+                f"{', '.join(hooks[:2]) if hooks else '效率提升'}方面"
+                f"可提供针对性合作方案。方便约15分钟简短沟通吗？"
             )
             logger.warning(f"[COPYWRITER] body为空，使用备用正文")
+        if not body or len(body.strip()) < 5:
+            body = f"尊敬的联系人，关注{company}的近期动态，我司产品与贵司业务高度匹配，期待进一步沟通。方便约个简短电话吗？"
+            logger.warning(f"[COPYWRITER] body极短，使用最终兜底正文")
 
         draft = result.model_dump()
         if body != draft.get("body"):

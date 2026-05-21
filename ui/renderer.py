@@ -95,9 +95,13 @@ def _render_sdr_result(result: dict):
 
     email = result.get("email_draft", {})
     if email:
-        st.markdown("<br>" + section_title("✉️ 开发信草稿"), unsafe_allow_html=True)
+        st.divider()
+        st.markdown(section_title("✉️ 开发信草稿"), unsafe_allow_html=True)
         st.text_input("📌 邮件主题", value=redact_secrets(email.get("subject", "")), key="disp_subject")
-        st.text_area("📝 邮件正文（可直接编辑）", value=redact_secrets(email.get("body", "")), height=220, key="disp_body")
+        body_val = email.get("body", "")
+        if not body_val or len(body_val.strip()) < 5:
+            body_val = "（开发信正文生成异常，请联系管理员）"
+        st.text_area("📝 邮件正文（可直接编辑）", value=redact_secrets(body_val), height=220, key="disp_body")
         if email.get("ps_line"):
             st.caption(redact_secrets(f"**PS：** {email['ps_line']}"))
 
