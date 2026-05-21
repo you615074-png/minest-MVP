@@ -74,7 +74,7 @@ def copywriter_node(state: AgentState) -> AgentState:
         if body != draft.get("body"):
             draft["body"] = body
 
-        log_msg = f"[{AgentRole.COPYWRITER}] ✅ 开发信草稿生成完成"
+        log_msg = f"[{AgentRole.COPYWRITER}] ✅ 开发信草稿生成完成（正文 {len(draft.get('body', ''))} 字）"
         logs.append(log_msg)
         logger.info(log_msg)
         logs.append(f"[{AgentRole.COPYWRITER}] 主题：{draft['subject']}")
