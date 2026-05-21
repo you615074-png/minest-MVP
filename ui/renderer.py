@@ -108,16 +108,14 @@ def _render_sdr_result(result: dict):
             st.session_state.email_body = redact_secrets(body_val)
             st.session_state._email_dirty = True
 
-        try:
-            st.text_area("📝 邮件正文（可直接编辑）", key="email_body", height=220)
-        except Exception:
-            body_backup = st.session_state.get("email_body", "")
-            st.warning("⚠️ 编辑器组件异常，下方为纯文本备份")
-            st.markdown(
-                f"<div style='background:#161b22;border:1px solid #30363d;border-radius:10px;padding:16px 20px;line-height:1.8;color:#e6edf3;font-size:14px;white-space:pre-wrap;'>{redact_secrets(body_backup)}</div>",
-                unsafe_allow_html=True,
-            )
-
+        st.markdown(section_title("📝 邮件正文"), unsafe_allow_html=True)
+        body_display = st.session_state.get("email_body", body_val)
+        st.markdown(
+            f"<div style='background:#161b22;border:1px solid #30363d;border-radius:10px;"
+            f"padding:16px 20px;line-height:1.9;color:#e0e7ef;font-size:14px;"
+            f"white-space:pre-wrap;min-height:60px;'>{redact_secrets(body_display)}</div>",
+            unsafe_allow_html=True,
+        )
         st.caption(f"📄 正文 {len(body_val)} 字 | 主题 {len(email.get('subject', ''))} 字")
         if email.get("ps_line"):
             st.caption(redact_secrets(f"**PS：** {email['ps_line']}"))
