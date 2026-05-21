@@ -1,19 +1,68 @@
-from pydantic import BaseModel, Field
+"""
+商机打分员 — 四维固定档位评分 + Pydantic 自动校正。
+"""
+from pydantic import BaseModel, Field, model_validator
 from utils.helpers import get_agent_llm
 from utils.llm import invoke_structured
 from core.state import AgentState
 from core import RECOVERABLE_ERRORS, AgentRole
 from utils.logger import logger
 
+# 有效分数档位（LLM 只能在以下值中选择）
+VALID_TIERS = {
+    "industry_score": (0, 15, 25),
+    "pain_point_score": (0, 20, 35),
+    "size_score": (0, 10, 20),
+    "timing_score": (0, 10, 20),
+}
+
+
+def _snap_to_tier(value: int, tiers: tuple[int, ...]) -> int:
+    """将任意整数靠拢到最近的有效档位"""
+    return min(tiers, key=lambda t: abs(t - value))
+
+
+def _validate_sub_score(value: int, tiers: tuple[int, ...]) -> int:
+    if value in tiers:
+        return value
+    return _snap_to_tier(value, tiers)
+
 
 class LeadScore(BaseModel):
-    industry_score: int = Field(description="行业匹配度得分 (0-25)")
-    pain_point_score: int = Field(description="痛点契合度得分 (0-35)")
-    size_score: int = Field(description="规模适配度得分 (0-20)")
-    timing_score: int = Field(description="时机成熟度得分 (0-20)")
-    score: int = Field(description="综合评分，必须等于上方四项得分之和", ge=0, le=100)
-    rationale: str = Field(description="详细的评分依据，150字以内，需引用公司具体特征及扣分点")
-    key_hooks: list[str] = Field(description="最重要的销售切入点，2-3条，每条20字以内")
+    industry_score: int = Field(description="行业匹配度得分——只能选 0 / 15 / 25")
+    pain_point_score: int = Field(description="痛点契合度得分——只能选 0 / 20 / 35")
+    size_score: int = Field(description="规模适配度得分——只能选 0 / 10 / 20")
+    timing_score: int = Field(description="时机成熟度得分——只能选 0 / 10 / 20")
+    score: int = Field(description="综合评分，必须等于四项之和", ge=0, le=100)
+    rationale: str = Field(description="评分依据，150字以内，需引用公司具体特征")
+    key_hooks: list[str] = Field(description="销售切入点，2-3条，每条20字以内")
+
+    @model_validator(mode="after")
+    def enforce_scoring_rules(self):
+        corrections = {}
+
+        for field_name, tiers in VALID_TIERS.items():
+            raw = getattr(self, field_name)
+            corrected = _validate_sub_score(raw, tiers)
+            if corrected != raw:
+                corrections[field_name] = (raw, corrected)
+                setattr(self, field_name, corrected)
+
+        computed = (
+            self.industry_score
+            + self.pain_point_score
+            + self.size_score
+            + self.timing_score
+        )
+        if self.score != computed:
+            corrections["score"] = (self.score, computed)
+            self.score = computed
+
+        if corrections:
+            logger.info(
+                f"[SCORER] 自动校正评分: {corrections}"
+            )
+        return self
 
 
 def scorer_node(state: AgentState) -> AgentState:
@@ -44,47 +93,29 @@ def scorer_node(state: AgentState) -> AgentState:
 近期动态：{', '.join(profile.get('recent_news', []))}
 推断痛点：{', '.join(profile.get('pain_points_inferred', []))}
 
-请严格按以下四个维度的【固定档位】进行选择打分（绝不能给出规定档位之外的分数）：
+请严格按以下四个维度的【固定档位】评分，每个维度只能从给定选项中选择一个整数：
+1. industry_score: 只能选 {VALID_TIERS['industry_score']}
+2. pain_point_score: 只能选 {VALID_TIERS['pain_point_score']}
+3. size_score: 只能选 {VALID_TIERS['size_score']}
+4. timing_score: 只能选 {VALID_TIERS['timing_score']}
 
-1. 行业匹配度（满分25）：
-   - 25分：目标行业完全属于产品适用行业。
-   - 15分：产品普适性强，边缘行业也有潜在需求。
-   - 0分：完全不相干且无可能。
-
-2. 痛点契合度（满分35）：
-   - 35分：公司存在至少两个推断痛点与产品高度吻合。
-   - 20分：只有一个痛点吻合，或痛点较模糊但业务有关联。
-   - 0分：完全没有吻合的痛点。
-
-3. 规模适配度（满分20）：
-   - 20分：明确在理想客户(ICP)的规模范围内。
-   - 10分：规模信息"未知"或缺失。
-   - 0分：明确超出或低于 ICP 规模范围。
-
-4. 时机成熟度（满分20）：
-   - 20分：近期有明确的扩张、融资或产品发布等利好动态。
-   - 10分：无明显动态，或仅有中性动态。
-   - 0分：有明显的负面动态（如裁员、倒闭）。
-
-【重要】你的 final `score` 必须严格等于上述四项之和。
-请务必深思熟虑，确保相同的输入始终输出相同的分数。
+score 必须等于上述四项之和。
+即使你觉得某个值"接近"也对，系统会自动修正到最近的有效档位。请优先确保你的判断逻辑自洽。
 """
 
         result: LeadScore = invoke_structured(llm, prompt, LeadScore)
         should_proceed = result.score > 60
 
-        log_msg = f"[{AgentRole.SCORER}] ✅ 评分完成：{result.score}/100"
+        log_msg = f"[{AgentRole.SCORER}] ✅ 评分完成：{result.score}/100  (行业{result.industry_score}+痛点{result.pain_point_score}+规模{result.size_score}+时机{result.timing_score})"
         logs.append(log_msg)
         logger.info(log_msg)
-        logs.append(f"[{AgentRole.SCORER}] 依据：{result.rationale[:60]}...")
+        logs.append(f"[{AgentRole.SCORER}] 依据：{result.rationale[:80]}...")
 
         if should_proceed:
-            log_msg = f"[{AgentRole.SCORER}] ✅ 评分合格（>60），移交文案专家"
-            logs.append(log_msg)
+            logs.append(f"[{AgentRole.SCORER}] ✅ 评分合格（>60），移交文案专家")
             logger.info(log_msg)
         else:
-            log_msg = f"[{AgentRole.SCORER}] ⛔ 评分不足60分，终止流程，节省 API 成本"
-            logs.append(log_msg)
+            logs.append(f"[{AgentRole.SCORER}] ⛔ 评分不足60分，终止流程，节省 API 成本")
             logger.info(log_msg)
 
         return {
