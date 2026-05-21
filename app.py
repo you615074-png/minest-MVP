@@ -89,6 +89,7 @@ with st.sidebar:
                     with col_view:
                         if st.button("查看详情", key=f"btn_{r['id']}", use_container_width=True):
                             st.session_state.current_result = r.get("full_result")
+                            st.session_state._email_dirty = False
                             fr = r.get("full_result", {})
                             st.session_state.product_desc = fr.get("product_desc", "")
                             st.session_state.icp_definition = fr.get("icp_definition", "")
@@ -293,6 +294,7 @@ with right_col.container(height=800, border=False):
         all_results = run_workflow(args, log_slot)
 
         st.session_state.current_result = all_results[-1] if all_results else None
+        st.session_state._email_dirty = False
         st.session_state.is_running = False
         st.rerun()
 
