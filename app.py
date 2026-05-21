@@ -13,7 +13,6 @@ from ui.auth_ui import render_auth_section, auth_dialog
 from ui.components import history_item, terminal_box
 from ui.workflow import run_workflow
 from ui.renderer import render_result
-from ui.metrics import before_after_comparison, architecture_diagram
 
 init_db()
 init_session()
@@ -114,6 +113,27 @@ left_col, right_col = st.columns([1, 1.5], gap="large")
 with left_col.container(height=800, border=False):
     st.markdown('<div class="section-title">📥 配置控制台</div>', unsafe_allow_html=True)
 
+    st.caption("🎬 没想好填什么？选一个场景，三行自动填好，点按钮就能看效果：")
+    prefill_col1, prefill_col2 = st.columns(2)
+    with prefill_col1:
+        if st.button("📋 分析 SaaS 公司的销售线索", use_container_width=True, key="q1",
+                     help="自动填入 CRM 产品描述 + Intercom 目标网址"):
+            st.session_state._prefill_product = "企业级AI CRM系统，帮助B2B销售团队管理客户关系、自动化跟进流程。目标客群为50-500人的SaaS企业。已服务200+客户，核心优势是AI驱动的销售预测和自动化邮件序列。"
+            st.session_state._prefill_icp = "SaaS公司，50-200人规模，有销售团队"
+            st.session_state._prefill_url = "https://www.intercom.com"
+            st.session_state._prefill_done = True
+            st.rerun()
+    with prefill_col2:
+        if st.button("🛒 分析跨境电商的客户画像", use_container_width=True, key="q2",
+                     help="自动填入 ERP 产品描述 + Shopify 目标网址"):
+            st.session_state._prefill_product = "跨境电商ERP SaaS平台，支持多平台订单管理、库存同步、物流追踪。服务于东南亚市场的跨境电商卖家，日均处理订单10万+。"
+            st.session_state._prefill_icp = "跨境电商卖家，年GMV 100万美元以上"
+            st.session_state._prefill_url = "https://www.shopify.com"
+            st.session_state._prefill_done = True
+            st.rerun()
+    if st.session_state.get("_prefill_done"):
+        st.success("✅ 已填入演示数据，点击下方「一键生成」即可查看分析效果")
+
     product_desc = st.text_area(
         "🏢 我方产品卖点",
         placeholder="描述你的核心价值主张、目标客群、差异化优势、成功案例...",
@@ -121,23 +141,7 @@ with left_col.container(height=800, border=False):
         max_chars=2000,
         key="product_desc",
         value=st.session_state.get("_prefill_product", ""),
-        help="试试这个示例：AI智能客服系统，面向SaaS企业，支持7×24小时自动应答，降低70%人工客服成本",
     )
-
-    with st.expander("💡 示例数据（点击填入）"):
-        ex1_col, ex2_col = st.columns(2)
-        with ex1_col:
-            if st.button("📋 SaaS CRM 销售", use_container_width=True, key="ex1"):
-                st.session_state._prefill_product = "企业级AI CRM系统，帮助B2B销售团队管理客户关系、自动化跟进流程。目标客群为50-500人的SaaS企业。已服务200+客户，核心优势是AI驱动的销售预测和自动化邮件序列。"
-                st.session_state._prefill_icp = "SaaS公司，50-200人规模，有销售团队"
-                st.session_state._prefill_url = "https://www.intercom.com"
-                st.rerun()
-        with ex2_col:
-            if st.button("🛒 跨境电商 ERP", use_container_width=True, key="ex2"):
-                st.session_state._prefill_product = "跨境电商ERP SaaS平台，支持多平台订单管理、库存同步、物流追踪。服务于东南亚市场的跨境电商卖家，日均处理订单10万+。"
-                st.session_state._prefill_icp = "跨境电商卖家，年GMV 100万美元以上"
-                st.session_state._prefill_url = "https://www.shopify.com"
-                st.rerun()
 
     col_icp, col_lang = st.columns([2, 1])
     with col_icp:
@@ -273,8 +277,5 @@ with right_col.container(height=800, border=False):
             '<div class="terminal-box" style="color:#484f58;">等待任务启动...<br>请在左侧填写配置后点击按钮，或在侧边栏选中历史记录。</div>',
             unsafe_allow_html=True,
         )
-        st.divider()
-        st.markdown(before_after_comparison(), unsafe_allow_html=True)
-        st.markdown(architecture_diagram(), unsafe_allow_html=True)
     else:
         render_result(result)

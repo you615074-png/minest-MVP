@@ -1,46 +1,26 @@
 """
-结果展示渲染器 — Pipeline + 指标仪表盘 + SDR / 市场分析 / 导出。
+结果展示渲染器 — SDR / 市场分析 / 导出。
 """
 import time
 import streamlit as st
 from ui.components import (
     terminal_box, section_title, persona_card, hook_tags, company_target_card,
 )
-from ui.pipeline import pipeline_html
-from ui.metrics import metrics_dashboard, before_after_comparison, architecture_diagram
 from utils.secrets import redact_secrets
 
 
 def render_result(result: dict):
     mode = result.get("mode")
 
-    # Pipeline 可视化
-    if mode == "MARKET_ANALYSIS":
-        st.markdown(pipeline_html(current_step=0, mode="MARKET_ANALYSIS"), unsafe_allow_html=True)
-    elif result.get("lead_score", 0) > 0:
-        step = 4 if result.get("email_draft", {}).get("body") else 3
-        st.markdown(pipeline_html(current_step=step, mode="SDR"), unsafe_allow_html=True)
-    else:
-        st.markdown(pipeline_html(current_step=-1, mode="SDR"), unsafe_allow_html=True)
-
-    # 指标仪表盘
-    if not result.get("error_message") and mode != "MARKET_ANALYSIS":
-        score = result.get("lead_score", 0)
-        if score > 0:
-            st.markdown(metrics_dashboard(result), unsafe_allow_html=True)
-
-    # 日志
     logs = result.get("log_messages", [])
     if logs:
         safe_logs = [redact_secrets(l) for l in logs]
         st.markdown(terminal_box(safe_logs), unsafe_allow_html=True)
 
-    # 错误
     if result.get("error_message"):
         st.error(f"❌ {redact_secrets(result['error_message'])}")
         return
 
-    # 输入条件回显
     st.markdown(section_title("📝 输入条件"), unsafe_allow_html=True)
     with st.container():
         st.caption(f"**产品卖点：** {result.get('product_desc', '-')[:120]}...")
