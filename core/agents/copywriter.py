@@ -8,7 +8,7 @@ from utils.logger import logger
 
 class EmailDraft(BaseModel):
     subject: str = Field(description="邮件主题行，必须引用目标公司具体近期事件，30字以内", min_length=5)
-    body: str = Field(description="邮件正文，100-200字中文，真诚专业，不以'我'开头", min_length=50)
+    body: str = Field(description="邮件正文，50-200字中文，真诚专业，不以'我'开头", min_length=10)
     ps_line: str = Field(description="PS附言，一句话补充说明或提供社会证明，50字以内")
 
 
@@ -56,14 +56,28 @@ def copywriter_node(state: AgentState) -> AgentState:
 
         result: EmailDraft = invoke_structured(llm, prompt, EmailDraft)
 
+        body = result.body
+        if not body or len(body) < 10:
+            hooks = state.get("key_hooks", [])
+            company = profile.get("company_name", "贵司")
+            body = (
+                f"关注到{company}近期动态，我司产品在{', '.join(hooks[:2]) if hooks else '团队协作'}领域"
+                f"可提供针对性方案。方便约15分钟快速沟通吗？"
+            )
+            logger.warning(f"[COPYWRITER] body为空，使用备用正文")
+
+        draft = result.model_dump()
+        if body != draft.get("body"):
+            draft["body"] = body
+
         log_msg = f"[{AgentRole.COPYWRITER}] ✅ 开发信草稿生成完成"
         logs.append(log_msg)
         logger.info(log_msg)
-        logs.append(f"[{AgentRole.COPYWRITER}] 主题：{result.subject}")
+        logs.append(f"[{AgentRole.COPYWRITER}] 主题：{draft['subject']}")
 
         return {
             **state,
-            "email_draft": result.model_dump(),
+            "email_draft": draft,
             "log_messages": logs,
         }
 

@@ -23,11 +23,14 @@ def invoke_structured(llm, prompt: str, pydantic_model, max_retries: int = 2):
         response = llm.invoke(base_prompt)
         try:
             return parser.parse(response.content)
-        except Exception:
+        except Exception as e:
             if attempt == max_retries:
                 raise
+            err_detail = str(e)
+            if len(err_detail) > 200:
+                err_detail = err_detail[:200]
             base_prompt = (
                 base_prompt
-                + "\n\n【系统指令】上一次输出格式不合法，请严格按照以上 JSON Schema 重新输出。只输出 JSON 对象，不要包含任何额外文字或 markdown 代码块标记。"
+                + f"\n\n【系统指令】验证错误：{err_detail}。请修正上述具体问题后重新输出。只输出 JSON 对象，不要包含 markdown 代码块标记。"
             )
     return None

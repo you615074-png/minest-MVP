@@ -124,7 +124,10 @@ with left_col.container(height=800, border=False):
     st.markdown('<div class="section-title">📥 配置控制台</div>', unsafe_allow_html=True)
 
     viewing = st.session_state.get("_viewing_history", False)
-    if viewing:
+    locked = viewing or st.session_state.is_running
+    if st.session_state.is_running:
+        st.info("⏳ AI 团队工作中，输入已锁定")
+    elif viewing:
         st.info("📋 正在查看历史记录 — 输入已锁定")
         if st.button("🆕 开启新分析", type="primary", use_container_width=True):
             st.session_state._viewing_history = False
@@ -135,7 +138,7 @@ with left_col.container(height=800, border=False):
     prefill_col1, prefill_col2 = st.columns(2)
     with prefill_col1:
         if st.button("📋 高分示例：智能办公 → 飞书", use_container_width=True, key="q1",
-                     help="AI 办公平台 + 飞书 (SaaS) → 预期高分生成开发信", disabled=viewing):
+                     help="AI 办公平台 + 飞书 (SaaS) → 预期高分生成开发信", disabled=locked):
             st.session_state.product_desc = "AI 智能办公平台，提供 IM、文档、视频会议、项目管理一体化方案。面向 50-2000 人中大型企业，服务 10 万+ 客户，核心优势是跨部门协作提效 300%。"
             st.session_state.icp_definition = "中大型企业，50-1000 人，有跨部门协作需求"
             st.session_state.target_url = "https://www.feishu.cn"
@@ -144,7 +147,7 @@ with left_col.container(height=800, border=False):
             st.rerun()
     with prefill_col2:
         if st.button("📋 低分示例：跨境 ERP → B站", use_container_width=True, key="q2",
-                     help="跨境 ERP + B站 (视频娱乐) → 预期低分自动终止", disabled=viewing):
+                     help="跨境 ERP + B站 (视频娱乐) → 预期低分自动终止", disabled=locked):
             st.session_state.product_desc = "跨境电商 ERP SaaS 平台，支持 Shopee、Lazada、TikTok Shop 等 12 个平台订单、库存、物流一站式管理。服务东南亚卖家，日均处理订单 10 万+。"
             st.session_state.icp_definition = "跨境电商卖家，年 GMV 100 万美元以上"
             st.session_state.target_url = "https://www.bilibili.com"
