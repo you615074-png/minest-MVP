@@ -14,7 +14,10 @@ def invoke_structured(llm, prompt: str, pydantic_model, max_retries: int = 2):
     parser = PydanticOutputParser(pydantic_object=pydantic_model)
     format_instructions = parser.get_format_instructions()
 
-    base_prompt = f"{prompt}\n\n{format_instructions}"
+    base_prompt = (
+        f"{prompt}\n\n{format_instructions}"
+        "\n\n输出要求：所有字段必须填充真实内容，不得输出空字符串或占位符。"
+    )
 
     for attempt in range(max_retries + 1):
         response = llm.invoke(base_prompt)

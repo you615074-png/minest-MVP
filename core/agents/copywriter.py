@@ -7,8 +7,8 @@ from utils.logger import logger
 
 
 class EmailDraft(BaseModel):
-    subject: str = Field(description="邮件主题行，必须引用目标公司具体近期事件，30字以内")
-    body: str = Field(description="邮件正文，200字以内中文，真诚专业，不以'我'开头")
+    subject: str = Field(description="邮件主题行，必须引用目标公司具体近期事件，30字以内", min_length=5)
+    body: str = Field(description="邮件正文，100-200字中文，真诚专业，不以'我'开头", min_length=50)
     ps_line: str = Field(description="PS附言，一句话补充说明或提供社会证明，50字以内")
 
 
@@ -51,7 +51,7 @@ def copywriter_node(state: AgentState) -> AgentState:
 【评分依据（了解背景）】
 {state.get('score_rationale', '')}
 
-请生成一封能让对方有共鸣、想回复的开发信。
+请生成一封能让对方有共鸣、想回复的开发信。务必填写完整的 body 字段（100-200字），不得留空或输出占位符。
 """
 
         result: EmailDraft = invoke_structured(llm, prompt, EmailDraft)
