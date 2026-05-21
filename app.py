@@ -5,7 +5,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from utils.db import init_db, get_user_history, search_user_history, delete_history
+from utils.db import init_db, get_user_history, search_user_history, delete_history, get_email_config, save_email_config, delete_email_config
+from utils.encrypt import encrypt, decrypt
 from utils.validator import validate_config
 from ui.styles import CSS_GLOBAL
 from ui.session import init_session, is_authenticated
@@ -103,6 +104,50 @@ with st.sidebar:
                             st.rerun()
 
     st.divider()
+    with st.expander("📧 邮件发送配置"):
+        if is_authenticated():
+            uid = st.session_state.current_user["id"]
+            cfg = get_email_config(uid)
+            smtp_host = st.text_input("SMTP 服务器", value=cfg["smtp_host"] if cfg else "", placeholder="smtp.qq.com", key="ec_host")
+            smtp_port = st.number_input("端口", value=cfg["smtp_port"] if cfg else 465, min_value=1, max_value=65535, key="ec_port")
+            smtp_user = st.text_input("发件邮箱", value=cfg["smtp_user"] if cfg else "", placeholder="your@email.com", key="ec_user")
+            smtp_pass = st.text_input("SMTP 授权码", type="password", placeholder="留空则不修改", key="ec_pass")
+            sender_name = st.text_input("发件人名称", value=cfg["sender_name"] if cfg else "AI SDR", key="ec_name")
+            col_save, col_test, col_del = st.columns([2, 2, 1])
+            with col_save:
+                if st.button("💾 保存配置", use_container_width=True):
+                    if not smtp_host or not smtp_user:
+                        st.error("SMTP 服务器和发件邮箱为必填项")
+                    elif not smtp_pass and not cfg:
+                        st.error("首次配置需填写 SMTP 授权码")
+                    else:
+                        final_pass = smtp_pass if smtp_pass else (decrypt(cfg["smtp_pass_encrypted"], cfg["smtp_pass_salt"], uid) if cfg else "")
+                        if not final_pass:
+                            st.error("无法获取 SMTP 密码，请重新输入")
+                        else:
+                            enc_pw, salt = encrypt(final_pass, uid)
+                            save_email_config(uid, smtp_host, smtp_port, smtp_user, enc_pw, salt, sender_name)
+                            st.success("✅ 邮件配置已保存")
+            with col_test:
+                if st.button("📤 测试发送", use_container_width=True, help="发送测试邮件到发件邮箱"):
+                    if not cfg and not smtp_host:
+                        st.error("请先保存配置")
+                    else:
+                        from utils.mailer import send_email
+                        h = cfg["smtp_host"] if cfg else smtp_host
+                        p = cfg["smtp_port"] if cfg else smtp_port
+                        u = cfg["smtp_user"] if cfg else smtp_user
+                        pw = decrypt(cfg["smtp_pass_encrypted"], cfg["smtp_pass_salt"], uid) if cfg else smtp_pass
+                        n = cfg["sender_name"] if cfg else sender_name
+                        ok, msg = send_email(u, "AI SDR 测试邮件", "这是一封来自 AI SDR 数字团队的测试邮件。", "", h, p, u, pw, n)
+                        if ok:
+                            st.success(msg)
+                        else:
+                            st.error(msg)
+            with col_del:
+                if st.button("🗑", key="del_ec", help="删除配置"):
+                    delete_email_config(uid)
+                    st.rerun()
     with st.expander("🔧 系统状态"):
         try:
             from utils.db import get_connection

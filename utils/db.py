@@ -73,7 +73,68 @@ def init_db():
             )
         ''')
 
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS email_configs (
+                user_id TEXT PRIMARY KEY,
+                smtp_host TEXT NOT NULL DEFAULT '',
+                smtp_port INTEGER NOT NULL DEFAULT 465,
+                smtp_user TEXT NOT NULL DEFAULT '',
+                smtp_pass_encrypted TEXT NOT NULL DEFAULT '',
+                smtp_pass_salt TEXT NOT NULL DEFAULT '',
+                sender_name TEXT NOT NULL DEFAULT 'AI SDR',
+                FOREIGN KEY(user_id) REFERENCES users(id)
+            )
+        ''')
+
         conn.commit()
+
+
+def save_email_config(user_id: str, smtp_host: str, smtp_port: int,
+                      smtp_user: str, pass_encrypted: str, pass_salt: str,
+                      sender_name: str):
+    if not user_id:
+        return
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT OR REPLACE INTO email_configs
+                (user_id, smtp_host, smtp_port, smtp_user, smtp_pass_encrypted, smtp_pass_salt, sender_name)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (user_id, smtp_host, smtp_port, smtp_user, pass_encrypted, pass_salt, sender_name))
+        conn.commit()
+
+
+def get_email_config(user_id: str) -> dict | None:
+    if not user_id:
+        return None
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT smtp_host, smtp_port, smtp_user, smtp_pass_encrypted, smtp_pass_salt, sender_name "
+            "FROM email_configs WHERE user_id = ?",
+            (user_id,)
+        )
+        row = cursor.fetchone()
+        if not row:
+            return None
+        return {
+            "smtp_host": row["smtp_host"],
+            "smtp_port": row["smtp_port"],
+            "smtp_user": row["smtp_user"],
+            "smtp_pass_encrypted": row["smtp_pass_encrypted"],
+            "smtp_pass_salt": row["smtp_pass_salt"],
+            "sender_name": row["sender_name"],
+        }
+
+
+def delete_email_config(user_id: str) -> bool:
+    if not user_id:
+        return False
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM email_configs WHERE user_id = ?", (user_id,))
+        conn.commit()
+        return cursor.rowcount > 0
 
 
 def save_history(user_id: str, mode: str, product_desc: str, target_url: str, full_result: dict):

@@ -7,6 +7,9 @@ from ui.components import (
     terminal_box, section_title, persona_card, hook_tags, company_target_card,
 )
 from utils.secrets import redact_secrets
+from utils.mailer import send_email
+from utils.db import get_email_config
+from utils.encrypt import decrypt
 
 
 def render_result(result: dict):
@@ -117,12 +120,42 @@ def _render_sdr_result(result: dict):
             unsafe_allow_html=True,
         )
         st.caption(f"📄 正文 {len(body_val)} 字 | 主题 {len(email.get('subject', ''))} 字")
-        if email.get("ps_line"):
-            st.caption(redact_secrets(f"**PS：** {email['ps_line']}"))
 
-        if st.button("✅ 批准并发送", type="primary", use_container_width=True, key="btn_send"):
-            st.balloons()
-            st.success("🎉 开发信已加入发件队列！（Demo 演示模式）")
+        st.text_input("📧 收件人邮箱", placeholder="partner@company.com", key="target_email")
+
+        email_cfg = get_email_config(st.session_state.current_user["id"]) if st.session_state.current_user else None
+        send_disabled = not email_cfg
+        send_hint = "请先在侧边栏「邮件发送配置」中完成 SMTP 设置" if send_disabled else ""
+
+        if st.button("📤 发送邮件", type="primary", use_container_width=True, disabled=send_disabled, help=send_hint):
+            to_email = st.session_state.get("target_email", "").strip()
+            if not to_email:
+                st.error("请先填写收件人邮箱")
+            else:
+                smtp_pass = decrypt(
+                    email_cfg["smtp_pass_encrypted"],
+                    email_cfg["smtp_pass_salt"],
+                    st.session_state.current_user["id"],
+                )
+                ok, msg = send_email(
+                    to_email,
+                    email.get("subject", ""),
+                    email.get("body", ""),
+                    email.get("ps_line", ""),
+                    email_cfg["smtp_host"],
+                    email_cfg["smtp_port"],
+                    email_cfg["smtp_user"],
+                    smtp_pass,
+                    email_cfg["sender_name"],
+                )
+                if ok:
+                    st.balloons()
+                    st.success(msg)
+                else:
+                    st.error(msg)
+
+        if send_disabled:
+            st.caption("📧 未配置邮件服务，发送功能不可用")
 
     elif score and score <= 60:
         st.info("⛔ 该线索评分低于 60 分，已自动跳过文案生成，节省 API Token 消耗。")
