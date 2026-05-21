@@ -134,19 +134,19 @@ with left_col.container(height=800, border=False):
     st.caption("🎬 没想好填什么？选一个场景，三行自动填好，点按钮就能看效果：")
     prefill_col1, prefill_col2 = st.columns(2)
     with prefill_col1:
-        if st.button("📋 高分示例：飞书 → 生成开发信", use_container_width=True, key="q1",
-                     help="AI CRM 系统 + 飞书 (SaaS) → 预期高分生成开发信", disabled=viewing):
-            st.session_state.product_desc = "企业级AI CRM系统，帮助B2B销售团队管理客户关系、自动化跟进流程。目标客群为50-500人的SaaS企业。已服务200+客户，核心优势是AI驱动的销售预测和自动化邮件序列。"
-            st.session_state.icp_definition = "SaaS公司，50-200人规模，有销售团队"
+        if st.button("📋 高分示例：智能办公 → 飞书", use_container_width=True, key="q1",
+                     help="AI 办公平台 + 飞书 (SaaS) → 预期高分生成开发信", disabled=viewing):
+            st.session_state.product_desc = "AI 智能办公平台，提供 IM、文档、视频会议、项目管理一体化方案。面向 50-2000 人中大型企业，服务 10 万+ 客户，核心优势是跨部门协作提效 300%。"
+            st.session_state.icp_definition = "中大型企业，50-1000 人，有跨部门协作需求"
             st.session_state.target_url = "https://www.feishu.cn"
             st.session_state._prefill_done = True
             st.session_state._viewing_history = False
             st.rerun()
     with prefill_col2:
-        if st.button("📋 低分示例：B站 → 自动终止", use_container_width=True, key="q2",
-                     help="AI CRM 系统 + B站 (视频娱乐) → 预期低分自动终止", disabled=viewing):
-            st.session_state.product_desc = "企业级AI CRM系统，帮助B2B销售团队管理客户关系、自动化跟进流程。目标客群为50-500人的SaaS企业。已服务200+客户，核心优势是AI驱动的销售预测和自动化邮件序列。"
-            st.session_state.icp_definition = "SaaS公司，50-200人规模，有销售团队"
+        if st.button("📋 低分示例：跨境 ERP → B站", use_container_width=True, key="q2",
+                     help="跨境 ERP + B站 (视频娱乐) → 预期低分自动终止", disabled=viewing):
+            st.session_state.product_desc = "跨境电商 ERP SaaS 平台，支持 Shopee、Lazada、TikTok Shop 等 12 个平台订单、库存、物流一站式管理。服务东南亚卖家，日均处理订单 10 万+。"
+            st.session_state.icp_definition = "跨境电商卖家，年 GMV 100 万美元以上"
             st.session_state.target_url = "https://www.bilibili.com"
             st.session_state._prefill_done = True
             st.session_state._viewing_history = False
