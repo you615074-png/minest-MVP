@@ -1,27 +1,44 @@
-import bcrypt
 import uuid
 from datetime import datetime, timedelta
 from utils.db import DB_PATH, get_connection
 
+try:
+    import bcrypt as _bcrypt
+    BCRYPT_ROUNDS = 12
+    HAS_BCRYPT = True
+except ImportError:
+    HAS_BCRYPT = False
 
-BCRYPT_ROUNDS = 12
+_BCRYPT_PREFIX = b"$2b$"
 
 
 def hash_password(password: str) -> str:
-    """bcrypt 哈希，内置随机盐"""
-    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt(rounds=BCRYPT_ROUNDS)).decode("utf-8")
+    if not HAS_BCRYPT:
+        raise RuntimeError("bcrypt 未安装，请运行 pip install 'bcrypt>=4.0.0,<5.0.0'")
+    return _bcrypt.hashpw(
+        password.encode("utf-8"), _bcrypt.gensalt(rounds=BCRYPT_ROUNDS)
+    ).decode("utf-8")
 
 
 def check_password(password: str, hashed: str) -> bool:
-    """bcrypt 验密"""
-    return bcrypt.checkpw(password.encode("utf-8"), hashed.encode("utf-8"))
+    if not HAS_BCRYPT:
+        raise RuntimeError("bcrypt 未安装")
+
+    try:
+        return _bcrypt.checkpw(password.encode("utf-8"), hashed.encode("utf-8"))
+    except (ValueError, TypeError):
+        return False
+    except Exception:
+        try:
+            h = hashed.encode("utf-8")
+            if h.startswith(_BCRYPT_PREFIX):
+                return _bcrypt.checkpw(password.encode("utf-8"), h)
+        except Exception:
+            pass
+        return False
 
 
 def register_user(username: str, password: str) -> tuple[bool, str, dict]:
-    """
-    注册新用户
-    返回 (成功状态: bool, 信息: str, 用户对象: dict)
-    """
     if not username or not password:
         return False, "用户名和密码不能为空", {}
 
@@ -50,10 +67,6 @@ def register_user(username: str, password: str) -> tuple[bool, str, dict]:
 
 
 def authenticate_user(username: str, password: str) -> tuple[bool, str, dict]:
-    """
-    验证用户登录
-    返回 (成功状态: bool, 信息: str, 用户对象: dict)
-    """
     if not username or not password:
         return False, "用户名和密码不能为空", {}
 
@@ -76,10 +89,13 @@ def authenticate_user(username: str, password: str) -> tuple[bool, str, dict]:
         locked_until_str = row["locked_until"]
 
         if locked_until_str:
-            locked_until = datetime.fromisoformat(locked_until_str)
-            if datetime.now() < locked_until:
-                wait_mins = int((locked_until - datetime.now()).total_seconds() / 60) + 1
-                return False, f"账户已锁定，请在 {wait_mins} 分钟后再试", {}
+            try:
+                locked_until = datetime.fromisoformat(locked_until_str)
+                if datetime.now() < locked_until:
+                    wait_mins = int((locked_until - datetime.now()).total_seconds() / 60) + 1
+                    return False, f"账户已锁定，请在 {wait_mins} 分钟后再试", {}
+            except (ValueError, TypeError):
+                pass
 
         if check_password(password, db_hash):
             cursor.execute(
