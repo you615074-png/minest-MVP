@@ -177,18 +177,25 @@ minest MVP/
 │   └── renderer.py           # 结果展示渲染器
 │
 ├── utils/
-│   ├── helpers.py            # LLM 客户端工厂（多模型分发 + 温度控制）
-│   ├── db.py                 # SQLite 数据库（WAL 模式 + 连接管理器）
+│   ├── helpers.py            # LLM 客户端工厂（多模型分发 + 温度控制 + timeout）
+│   ├── llm.py                # 🆕 统一结构化输出解析（自动注入 JSON Schema + 格式重试）
+│   ├── db.py                 # SQLite 数据库（WAL 模式 + datetime 适配器 + 连接管理器）
 │   ├── auth.py               # 用户认证模块（bcrypt 哈希 + 防暴力破解）
-│   └── retry.py              # 🆕 指数退避重试装饰器
+│   ├── retry.py              # 指数退避重试装饰器
+│   ├── logger.py             # 🆕 结构化日志（控制台 + 文件双通道）
+│   ├── rate_limiter.py       # 🆕 API 限流控制器（RATE_LIMIT_RPM 可配）
+│   ├── secrets.py            # 🆕 输出脱敏（API Key 模式过滤）
+│   └── validator.py          # 🆕 启动配置校验
 │
-├── tests/                    # 🆕 单元测试
-│   ├── conftest.py           # 共享 fixtures
-│   ├── test_auth.py          # bcrypt 哈希、注册、登录、锁定
-│   ├── test_db.py            # 数据库 CRUD、历史裁剪
-│   ├── test_helpers.py       # LLM 工厂、温度控制
-│   ├── test_retry.py         # 重试装饰器
-│   └── test_state.py         # AgentState 字段完整性
+├── tests/                    # 单元测试（45 个测试用例）
+│   ├── conftest.py           # 共享 fixtures（临时数据库隔离）
+│   ├── test_auth.py          # bcrypt 哈希、注册、登录、锁定（15 个）
+│   ├── test_db.py            # 数据库 CRUD、历史裁剪（7 个）
+│   ├── test_helpers.py       # LLM 工厂、温度控制（4 个）
+│   ├── test_retry.py         # 重试装饰器（5 个）
+│   ├── test_state.py         # AgentState 字段完整性（2 个）
+│   ├── test_agents.py        # 🆕 Agent 节点输入输出（4 个）
+│   └── test_graph.py         # 🆕 路由逻辑验证（8 个）
 │
 ├── static/
 │   └── robots.txt            # 搜索引擎爬虫拦截
@@ -205,10 +212,16 @@ minest MVP/
 |---|---|
 | 防暴力破解 | 连续 5 次密码错误 → 账户锁定 15 分钟 |
 | 密码加密 | bcrypt 哈希（内置随机盐，12轮迭代） |
-| 数据库安全 | SQLite WAL 模式，连接上下文管理器防止泄露 |
+| 数据库安全 | SQLite WAL 模式 + datetime 适配器，连接上下文管理器防止泄露 |
 | 数据隔离 | 不同用户的历史记录通过 `user_id` 外键严格隔离 |
-| 前端脱敏 | 异常信息过滤 API Key 碎片，截断长堆栈 |
-| API 重试 | 指数退避装饰器，自动重试网络异常（HTTP/Tavily） |
+| 前端脱敏 | 异常信息过滤 API Key 碎片 + 所有输出自动 redact_secrets |
+| 输入校验 | 用户输入 max_chars 限制 + 上传文件 2MB/50 行上限 |
+| API 重试 | 指数退避装饰器（网络异常自动 2 次重试） |
+| LLM 超时 | request_timeout=60s + max_retries=2 |
+| 格式容错 | invoke_structured 自动注入 JSON Schema + 格式失败自动重试 |
+| 限流保护 | RateLimiter 可配（RATE_LIMIT_RPM，默认 20） |
+| 启动校验 | 启动时检查 LLM Provider 配置，缺失即告警 |
+| 健康检查 | 侧边栏实时显示 DB 和 LLM 连接状态 |
 | 反爬虫 | `robots.txt` 全站 Disallow |
 | 跨域防护 | 关闭 CORS + 开启 XSRF 保护 |
 | HTTPS 支持 | `start_secure.bat` 自动签发证书并加密启动 |
@@ -237,4 +250,9 @@ minest MVP/
 - ✅ **双栏独立滚动视图**：左侧输入区与右侧结果区彻底解耦，互不滚动干扰，告别传统单页瀑布流的痛点。
 - ✅ **流式实时终端反馈**：AI Agent 每一步执行细节实时刷新，拒绝死板的黑屏等待。
 - ✅ **金融级安全加固**：内建防暴力破解锁定机制、bcrypt 密码哈希、前端脱敏防泄漏，并附带基于 OpenSSL 的自签名 HTTPS 启动脚本。
-- ✅ **运行测试**：`python -m pytest tests -v`，34 个单元测试覆盖认证、数据库、LLM 工厂、重试机制
+- ✅ **运行测试**：`python -m pytest tests -v`，45 个单元测试覆盖认证、数据库、LLM 工厂、重试、Agent 节点、路由逻辑
+- ✅ **历史记录管理**：侧边栏支持关键词搜索 + 单条删除
+- ✅ **系统状态面板**：侧边栏底部实时显示数据库连接和 LLM 配置状态
+- ✅ **结构化日志**：控制台 + 文件双通道，级别过滤，按时间追溯
+- ✅ **异常白名单**：6 处裸 except Exception 替换为 RECOVERABLE_ERRORS 精确捕获
+- ✅ **多 LLM 温控表**：Agent 角色自动匹配最佳 Temperature，保证评分一致性

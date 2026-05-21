@@ -9,6 +9,18 @@ DB_PATH = "app_data.db"
 MAX_HISTORY_PER_USER = 50
 
 
+def _adapt_datetime(val: datetime) -> str:
+    return val.isoformat()
+
+
+def _adapt_date(val: date) -> str:
+    return val.isoformat()
+
+
+sqlite3.register_adapter(datetime, _adapt_datetime)
+sqlite3.register_adapter(date, _adapt_date)
+
+
 def _json_serializer(obj):
     if isinstance(obj, (datetime, date)):
         return obj.isoformat()
