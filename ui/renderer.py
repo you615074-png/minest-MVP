@@ -1,30 +1,53 @@
+"""
+结果展示渲染器 — Pipeline + 指标仪表盘 + SDR / 市场分析 / 导出。
+"""
 import time
 import streamlit as st
 from ui.components import (
     terminal_box, section_title, persona_card, hook_tags, company_target_card,
 )
+from ui.pipeline import pipeline_html
+from ui.metrics import metrics_dashboard, before_after_comparison, architecture_diagram
 from utils.secrets import redact_secrets
 
 
 def render_result(result: dict):
+    mode = result.get("mode")
+
+    # Pipeline 可视化
+    if mode == "MARKET_ANALYSIS":
+        st.markdown(pipeline_html(current_step=0, mode="MARKET_ANALYSIS"), unsafe_allow_html=True)
+    elif result.get("lead_score", 0) > 0:
+        step = 4 if result.get("email_draft", {}).get("body") else 3
+        st.markdown(pipeline_html(current_step=step, mode="SDR"), unsafe_allow_html=True)
+    else:
+        st.markdown(pipeline_html(current_step=-1, mode="SDR"), unsafe_allow_html=True)
+
+    # 指标仪表盘
+    if not result.get("error_message") and mode != "MARKET_ANALYSIS":
+        score = result.get("lead_score", 0)
+        if score > 0:
+            st.markdown(metrics_dashboard(result), unsafe_allow_html=True)
+
+    # 日志
     logs = result.get("log_messages", [])
     if logs:
         safe_logs = [redact_secrets(l) for l in logs]
         st.markdown(terminal_box(safe_logs), unsafe_allow_html=True)
 
+    # 错误
     if result.get("error_message"):
         st.error(f"❌ {redact_secrets(result['error_message'])}")
         return
 
-    st.markdown(section_title("📝 当时的输入条件", margin_top="20px"), unsafe_allow_html=True)
+    # 输入条件回显
+    st.markdown(section_title("📝 输入条件"), unsafe_allow_html=True)
     with st.container():
-        st.caption(f"**我方产品卖点：** {result.get('product_desc', '-')}")
+        st.caption(f"**产品卖点：** {result.get('product_desc', '-')[:120]}...")
         if result.get("icp_definition") and result.get("icp_definition") != "不限行业和规模":
-            st.caption(f"**理想客户画像：** {result.get('icp_definition', '-')}")
+            st.caption(f"**ICP：** {result.get('icp_definition', '-')}")
         if result.get("target_url"):
-            st.caption(f"**目标公司网址：** {result.get('target_url', '-')}")
-
-    mode = result.get("mode")
+            st.caption(f"**目标网址：** {result.get('target_url', '-')}")
 
     if mode == "MARKET_ANALYSIS":
         _render_market_analysis(result)
@@ -35,7 +58,7 @@ def render_result(result: dict):
 
 
 def _render_market_analysis(result: dict):
-    st.markdown("<br>" + section_title("🎯 目标受众与市场分析报告"), unsafe_allow_html=True)
+    st.markdown("<br>" + section_title("🎯 目标受众与市场分析"), unsafe_allow_html=True)
     market_data = result.get("market_analysis", {})
 
     if not market_data:
@@ -56,7 +79,7 @@ def _render_market_analysis(result: dict):
 def _render_sdr_result(result: dict):
     profile = result.get("company_profile", {})
     if profile:
-        with st.expander("📋 公司档案", expanded=False):
+        with st.expander("📋 公司档案", expanded=True):
             ca, cb = st.columns(2)
             ca.write(f"**公司：** {profile.get('company_name', '-')}")
             ca.write(f"**行业：** {profile.get('industry', '-')}")
