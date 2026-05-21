@@ -1,6 +1,3 @@
-"""
-B2B AI SDR 数字团队 — Streamlit 应用入口
-"""
 import uuid
 import pandas as pd
 import streamlit as st
@@ -8,7 +5,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from utils.db import init_db, get_user_history
+from utils.db import init_db, get_user_history, search_user_history, delete_history
+from utils.validator import validate_config
 from ui.styles import CSS_GLOBAL
 from ui.session import init_session, is_authenticated
 from ui.auth_ui import render_auth_section, auth_dialog
@@ -16,11 +14,11 @@ from ui.components import history_item, terminal_box
 from ui.workflow import run_workflow
 from ui.renderer import render_result
 
-# ── 初始化 ────────────────────────────────────────────────────
 init_db()
 init_session()
 
-# ── 页面配置 ──────────────────────────────────────────────────
+errors, warnings = validate_config()
+
 st.set_page_config(
     page_title="AI SDR 数字团队",
     page_icon="🤖",
@@ -30,7 +28,6 @@ st.set_page_config(
 
 st.markdown(CSS_GLOBAL, unsafe_allow_html=True)
 
-# ── 顶部栏 ────────────────────────────────────────────────────
 top_l, top_r = st.columns([8, 2], vertical_alignment="center")
 
 with top_l:
@@ -46,15 +43,25 @@ with top_r:
 
 st.divider()
 
-# ── 边栏：历史记录 ──────────────────────────────────────────────
 with st.sidebar:
+    if errors:
+        for err in errors:
+            st.error(err)
+        st.stop()
+    if warnings:
+        with st.expander(f"⚠️ {len(warnings)} 个配置提醒"):
+            for w in warnings:
+                st.warning(w)
+
     st.markdown("### 📊 历史分析记录")
 
     if not is_authenticated():
         st.info("请先登录以查看历史记录")
     else:
         uid = st.session_state.current_user["id"]
-        records = get_user_history(uid)
+
+        search_kw = st.text_input("搜索历史", placeholder="输入关键词...", key="hist_search")
+        records = search_user_history(uid, search_kw) if search_kw else get_user_history(uid)
 
         if not records:
             st.caption("暂无记录，快去生成第一条分析吧！")
@@ -75,17 +82,34 @@ with st.sidebar:
 
                 st.markdown(history_item(icon, title, date_str), unsafe_allow_html=True)
 
-                if st.button("查看详情", key=f"btn_{r['id']}", use_container_width=True):
-                    st.session_state.current_result = r.get("full_result")
+                col_view, col_del = st.columns([2, 1])
+                with col_view:
+                    if st.button("查看详情", key=f"btn_{r['id']}", use_container_width=True):
+                        st.session_state.current_result = r.get("full_result")
+                with col_del:
+                    if st.button("🗑", key=f"del_{r['id']}", help="删除此记录"):
+                        delete_history(r["id"], uid)
+                        st.rerun()
 
-# ── 主布局 ────────────────────────────────────────────────────
+    st.divider()
+    with st.expander("🔧 系统状态"):
+        try:
+            from utils.db import get_connection
+            with get_connection() as conn:
+                conn.execute("SELECT 1")
+            st.caption("DB: ✅")
+        except Exception:
+            st.caption("DB: ❌")
+        st.caption("LLM: 启动校验已通过")
+        if hasattr(st.session_state, "is_running"):
+            st.caption(f"运行状态: {'🏃 工作中' if st.session_state.is_running else '⏸ 空闲'}")
+
 if not is_authenticated():
     st.warning("🔒 欢迎使用 AI SDR，请点击右上角 **登录/注册** 后开始使用。")
     st.stop()
 
 left_col, right_col = st.columns([1, 1.5], gap="large")
 
-# 左：控制台
 with left_col.container(height=800, border=False):
     st.markdown('<div class="section-title">📥 配置控制台</div>', unsafe_allow_html=True)
 
@@ -93,6 +117,7 @@ with left_col.container(height=800, border=False):
         "🏢 我方产品卖点",
         placeholder="描述你的核心价值主张、目标客群、差异化优势、成功案例...",
         height=130,
+        max_chars=2000,
         key="product_desc",
     )
 
@@ -101,6 +126,7 @@ with left_col.container(height=800, border=False):
         icp_definition = st.text_input(
             "🎯 理想客户画像 (ICP) - 可选",
             placeholder="例：有出海需求的SaaS企业",
+            max_chars=500,
             key="icp_definition",
         )
     with col_lang:
@@ -116,6 +142,7 @@ with left_col.container(height=800, border=False):
         target_url = st.text_input(
             "🔗 目标公司网址 (如果不填，将自动进入市场分析模式)",
             placeholder="https://example.com (留空则分析潜在市场)",
+            max_chars=500,
             key="target_url",
         )
 
@@ -137,17 +164,21 @@ with left_col.container(height=800, border=False):
                 st.session_state.current_result = None
                 st.session_state.thread_id = str(uuid.uuid4())
                 st.session_state.run_args = {
-                    "product_desc": product_desc,
+                    "product_desc": product_desc[:2000],
                     "icp_definition": icp_definition or "不限行业和规模",
-                    "target_url": target_url.strip(),
+                    "target_url": target_url.strip()[:500],
                     "language": output_lang,
                     "batch_mode": False,
                 }
                 st.rerun()
 
     with tab_batch:
-        st.info("批量处理会自动遍历名单，提取官网进行分析。为防触发 API 限流，两次请求间默认等待 3 秒。")
-        uploaded_file = st.file_uploader("上传包含 'url' 或 '网址' 列的文件", type=["csv", "xlsx"])
+        st.info("批量处理会自动遍历名单，提取官网进行分析。最大 2MB，最多 50 行。")
+        uploaded_file = st.file_uploader(
+            "上传包含 'url' 或 '网址' 列的文件",
+            type=["csv", "xlsx"],
+            help="文件最大 2MB，最多 50 行",
+        )
 
         batch_run_disabled = st.session_state.is_running or not uploaded_file
         batch_run_btn = st.button(
@@ -161,6 +192,8 @@ with left_col.container(height=800, border=False):
         if batch_run_btn and uploaded_file:
             if not product_desc.strip():
                 st.error("请填写我方产品卖点！")
+            elif uploaded_file.size > 2 * 1024 * 1024:
+                st.error("文件过大，请上传 2MB 以内的文件")
             else:
                 try:
                     if uploaded_file.name.endswith(".csv"):
@@ -180,6 +213,10 @@ with left_col.container(height=800, border=False):
                         urls = df[url_col].dropna().astype(str).tolist()
                         valid_urls = [u for u in urls if u.startswith("http") or "." in u]
 
+                        if len(valid_urls) > 50:
+                            st.warning(f"最大处理 50 条，已截取前 50 条")
+                            valid_urls = valid_urls[:50]
+
                         if not valid_urls:
                             st.error("列中没有找到有效的网址！")
                         else:
@@ -187,9 +224,9 @@ with left_col.container(height=800, border=False):
                             st.session_state.current_result = None
                             st.session_state.thread_id = str(uuid.uuid4())
                             st.session_state.run_args = {
-                                "product_desc": product_desc,
+                                "product_desc": product_desc[:2000],
                                 "icp_definition": icp_definition or "不限行业和规模",
-                                "target_urls": valid_urls[:20],
+                                "target_urls": valid_urls,
                                 "language": output_lang,
                                 "batch_mode": True,
                             }
@@ -197,7 +234,6 @@ with left_col.container(height=800, border=False):
                 except Exception as e:
                     st.error(f"解析文件失败: {str(e)}")
 
-# 右：结果区
 with right_col.container(height=800, border=False):
     st.markdown('<div class="section-title">📊 工作流实时状态</div>', unsafe_allow_html=True)
 

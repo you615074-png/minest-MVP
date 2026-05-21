@@ -1,6 +1,9 @@
 from pydantic import BaseModel, Field
 from utils.helpers import get_agent_llm
+from utils.llm import invoke_structured
 from core.state import AgentState
+from core import RECOVERABLE_ERRORS, AgentRole
+from utils.logger import logger
 
 
 class CompanyProfile(BaseModel):
@@ -15,41 +18,39 @@ class CompanyProfile(BaseModel):
 
 
 def processor_node(state: AgentState) -> AgentState:
-    """数据处理器：将原始情报结构化为公司档案 JSON"""
     logs = list(state.get("log_messages", []))
 
     if state.get("error_message"):
         return state
 
-    logs.append("⚙️ [处理器] 开始结构化提取公司信息...")
+    log_msg = f"[{AgentRole.PROCESSOR}] 开始结构化提取公司信息..."
+    logs.append(log_msg)
+    logger.info(log_msg)
 
     try:
         llm = get_agent_llm("PROCESSOR")
-        from langchain_core.output_parsers import PydanticOutputParser
-        parser = PydanticOutputParser(pydantic_object=CompanyProfile)
 
         prompt = f"""你是一个商业信息提取专家。请从以下原始文本中提取关键商业信息。
 目标公司官网网址为：{state['target_url']}
 
 【重要指令】
-1. 请务必确保你提取的 `company_name` 是【拥有该官网的主体公司】，绝不能是新闻中顺带提及的投资方、合作伙伴或个人（例如不能把投资人名字当作公司名）。
+1. 请务必确保你提取的 `company_name` 是【拥有该官网的主体公司】，绝不能是新闻中顺带提及的投资方、合作伙伴或个人。
 2. 若某项信息未明确提及，请根据上下文合理推断，无法推断则严格填"未知"。
 3. 确保 pain_points_inferred 中的痛点与该公司实际业务强相关。
 
 【原始文本】
-{state['company_raw_data']}
+{state['company_raw_data']}"""
 
-{parser.get_format_instructions()}"""
-
-        response = llm.invoke(prompt)
-        profile: CompanyProfile = parser.parse(response.content)
+        profile: CompanyProfile = invoke_structured(llm, prompt, CompanyProfile)
         profile_dict = profile.model_dump()
 
-        logs.append(
-            f"⚙️ [处理器] ✅ 识别公司：{profile_dict['company_name']} "
+        log_msg = (
+            f"[{AgentRole.PROCESSOR}] ✅ 识别公司：{profile_dict['company_name']} "
             f"| 行业：{profile_dict['industry']} "
             f"| 融资：{profile_dict['funding_stage']}"
         )
+        logs.append(log_msg)
+        logger.info(log_msg)
 
         return {
             **state,
@@ -57,8 +58,10 @@ def processor_node(state: AgentState) -> AgentState:
             "log_messages": logs,
         }
 
-    except Exception as e:
-        logs.append(f"⚙️ [处理器] ❌ 处理失败：{str(e)[:100]}")
+    except RECOVERABLE_ERRORS as e:
+        log_msg = f"[{AgentRole.PROCESSOR}] ❌ 处理失败：{str(e)[:100]}"
+        logs.append(log_msg)
+        logger.error(log_msg)
         return {
             **state,
             "error_message": f"数据处理失败：{str(e)}",

@@ -1,6 +1,9 @@
 from pydantic import BaseModel, Field
 from utils.helpers import get_agent_llm
+from utils.llm import invoke_structured
 from core.state import AgentState
+from core import RECOVERABLE_ERRORS, AgentRole
+from utils.logger import logger
 
 
 class LeadScore(BaseModel):
@@ -14,19 +17,17 @@ class LeadScore(BaseModel):
 
 
 def scorer_node(state: AgentState) -> AgentState:
-    """商机打分员：对比 ICP 评分，决定是否继续生成文案"""
     logs = list(state.get("log_messages", []))
 
     if state.get("error_message"):
         return state
 
-    logs.append("📊 [打分员] 开始评估商机质量...")
+    log_msg = f"[{AgentRole.SCORER}] 开始评估商机质量..."
+    logs.append(log_msg)
+    logger.info(log_msg)
 
     try:
         llm = get_agent_llm("SCORER")
-        from langchain_core.output_parsers import PydanticOutputParser
-        parser = PydanticOutputParser(pydantic_object=LeadScore)
-
         profile = state["company_profile"]
         prompt = f"""你是一位经验丰富的B2B销售顾问，请评估这条销售线索的质量。
 
@@ -57,7 +58,7 @@ def scorer_node(state: AgentState) -> AgentState:
 
 3. 规模适配度（满分20）：
    - 20分：明确在理想客户(ICP)的规模范围内。
-   - 10分：规模信息“未知”或缺失。
+   - 10分：规模信息"未知"或缺失。
    - 0分：明确超出或低于 ICP 规模范围。
 
 4. 时机成熟度（满分20）：
@@ -67,20 +68,24 @@ def scorer_node(state: AgentState) -> AgentState:
 
 【重要】你的 final `score` 必须严格等于上述四项之和。
 请务必深思熟虑，确保相同的输入始终输出相同的分数。
+"""
 
-{parser.get_format_instructions()}"""
-
-        response = llm.invoke(prompt)
-        result: LeadScore = parser.parse(response.content)
+        result: LeadScore = invoke_structured(llm, prompt, LeadScore)
         should_proceed = result.score > 60
 
-        logs.append(f"📊 [打分员] ✅ 评分完成：{result.score}/100")
-        logs.append(f"📊 [打分员] 依据：{result.rationale[:60]}...")
+        log_msg = f"[{AgentRole.SCORER}] ✅ 评分完成：{result.score}/100"
+        logs.append(log_msg)
+        logger.info(log_msg)
+        logs.append(f"[{AgentRole.SCORER}] 依据：{result.rationale[:60]}...")
 
         if should_proceed:
-            logs.append("📊 [打分员] ✅ 评分合格（>60），移交文案专家")
+            log_msg = f"[{AgentRole.SCORER}] ✅ 评分合格（>60），移交文案专家"
+            logs.append(log_msg)
+            logger.info(log_msg)
         else:
-            logs.append("📊 [打分员] ⛔ 评分不足60分，终止流程，节省 API 成本")
+            log_msg = f"[{AgentRole.SCORER}] ⛔ 评分不足60分，终止流程，节省 API 成本"
+            logs.append(log_msg)
+            logger.info(log_msg)
 
         return {
             **state,
@@ -91,8 +96,10 @@ def scorer_node(state: AgentState) -> AgentState:
             "log_messages": logs,
         }
 
-    except Exception as e:
-        logs.append(f"📊 [打分员] ❌ 评分失败：{str(e)[:100]}")
+    except RECOVERABLE_ERRORS as e:
+        log_msg = f"[{AgentRole.SCORER}] ❌ 评分失败：{str(e)[:100]}"
+        logs.append(log_msg)
+        logger.error(log_msg)
         return {
             **state,
             "error_message": f"评分失败：{str(e)}",

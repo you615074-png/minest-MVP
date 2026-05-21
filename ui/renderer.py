@@ -1,26 +1,21 @@
-"""
-结果展示渲染器 — 负责最终结果的 UI 渲染（SDR / 市场分析 / 导出）。
-"""
 import time
 import streamlit as st
 from ui.components import (
     terminal_box, section_title, persona_card, hook_tags, company_target_card,
 )
+from utils.secrets import redact_secrets
 
 
 def render_result(result: dict):
-    """根据 result 内容渲染完整结果页面"""
-    # 1. 日志
     logs = result.get("log_messages", [])
     if logs:
-        st.markdown(terminal_box(logs), unsafe_allow_html=True)
+        safe_logs = [redact_secrets(l) for l in logs]
+        st.markdown(terminal_box(safe_logs), unsafe_allow_html=True)
 
-    # 2. 错误
     if result.get("error_message"):
-        st.error(f"❌ {result['error_message']}")
+        st.error(f"❌ {redact_secrets(result['error_message'])}")
         return
 
-    # 3. 输入条件回显
     st.markdown(section_title("📝 当时的输入条件", margin_top="20px"), unsafe_allow_html=True)
     with st.container():
         st.caption(f"**我方产品卖点：** {result.get('product_desc', '-')}")
@@ -40,14 +35,13 @@ def render_result(result: dict):
 
 
 def _render_market_analysis(result: dict):
-    """渲染市场分析模式结果"""
     st.markdown("<br>" + section_title("🎯 目标受众与市场分析报告"), unsafe_allow_html=True)
     market_data = result.get("market_analysis", {})
 
     if not market_data:
         return
 
-    st.info(f"💡 **市场切入建议：** {market_data.get('market_insights', '')}")
+    st.info(redact_secrets(f"💡 **市场切入建议：** {market_data.get('market_insights', '')}"))
 
     for i, persona in enumerate(market_data.get("personas", [])):
         st.markdown(persona_card(persona, i), unsafe_allow_html=True)
@@ -60,8 +54,6 @@ def _render_market_analysis(result: dict):
 
 
 def _render_sdr_result(result: dict):
-    """渲染标准 SDR 模式结果（公司档案 + 评分 + 开发信）"""
-    # 公司档案
     profile = result.get("company_profile", {})
     if profile:
         with st.expander("📋 公司档案", expanded=False):
@@ -81,7 +73,6 @@ def _render_sdr_result(result: dict):
                 for p in profile["pain_points_inferred"]:
                     st.write(f"  💡 {p}")
 
-    # 评分
     score = result.get("lead_score", 0)
     if score:
         st.markdown("<br>" + section_title("📊 商机评分"), unsafe_allow_html=True)
@@ -99,14 +90,13 @@ def _render_sdr_result(result: dict):
         if hooks:
             st.markdown(f"**核心切入点：**<br>{hook_tags(hooks)}", unsafe_allow_html=True)
 
-    # 开发信
     email = result.get("email_draft", {})
     if email:
         st.markdown("<br>" + section_title("✉️ 开发信草稿"), unsafe_allow_html=True)
-        st.text_input("📌 邮件主题", value=email.get("subject", ""), key="disp_subject")
-        st.text_area("📝 邮件正文（可直接编辑）", value=email.get("body", ""), height=220, key="disp_body")
+        st.text_input("📌 邮件主题", value=redact_secrets(email.get("subject", "")), key="disp_subject")
+        st.text_area("📝 邮件正文（可直接编辑）", value=redact_secrets(email.get("body", "")), height=220, key="disp_body")
         if email.get("ps_line"):
-            st.caption(f"**PS：** {email['ps_line']}")
+            st.caption(redact_secrets(f"**PS：** {email['ps_line']}"))
 
         if st.button("✅ 批准并发送", type="primary", use_container_width=True, key="btn_send"):
             st.balloons()
@@ -117,7 +107,6 @@ def _render_sdr_result(result: dict):
 
 
 def _render_export(result: dict, mode: str):
-    """渲染导出按钮 — 生成 Markdown 报告"""
     st.divider()
 
     report_md = f"# AI SDR 分析报告\n\n**生成语言**: {result.get('language', '简体中文')}\n"
@@ -136,6 +125,8 @@ def _render_export(result: dict, mode: str):
         if score > 60 and result.get("email_draft"):
             email_d = result.get("email_draft")
             report_md += f"## ✉️ 开发信草稿\n**主题**: {email_d.get('subject')}\n\n**正文**:\n{email_d.get('body')}\n\n**PS**: {email_d.get('ps_line', '')}\n"
+
+    report_md = redact_secrets(report_md)
 
     st.download_button(
         label="📥 导出分析报告 (Markdown)",

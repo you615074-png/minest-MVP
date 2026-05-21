@@ -1,20 +1,20 @@
-"""
-工作流执行引擎 — 处理单条/批量分析任务。
-"""
-import uuid
-import time
 import streamlit as st
 from core.graph import graph
+from core import RECOVERABLE_ERRORS
 from ui.components import terminal_box
 from utils.db import save_history
+from utils.rate_limiter import get_rate_limiter
+from utils.logger import logger
+
+MAX_LOG_LINES = 30
 
 
 def run_workflow(args: dict, log_slot):
-    """执行工作流并渲染实时日志，返回 (all_results: list[dict])"""
     is_batch = args.get("batch_mode", False)
     target_urls = args.get("target_urls", [args.get("target_url", "")])
     user_id = st.session_state.current_user["id"]
     thread_id = st.session_state.thread_id
+    rate_limiter = get_rate_limiter() if is_batch else None
 
     all_results = []
     for i, url in enumerate(target_urls):
@@ -46,20 +46,21 @@ def run_workflow(args: dict, log_slot):
                 final_state = s
                 logs = s.get("log_messages", [])
                 if logs:
-                    log_slot.markdown(terminal_box(logs), unsafe_allow_html=True)
+                    visible = logs[-MAX_LOG_LINES:] if len(logs) > MAX_LOG_LINES else logs
+                    log_slot.markdown(terminal_box(visible), unsafe_allow_html=True)
 
-            mode = final_state.get("mode", "SDR" if url else "MARKET_ANALYSIS")
-            save_history(user_id, mode, args["product_desc"], url, final_state)
+            mode_val = final_state.get("mode", "SDR" if url else "MARKET_ANALYSIS")
+            save_history(user_id, mode_val, args["product_desc"], url, final_state)
             all_results.append(final_state)
 
-            if is_batch and i < len(target_urls) - 1:
+            if rate_limiter is not None and i < len(target_urls) - 1:
                 log_slot.markdown(
-                    '<div class="terminal-box"><span class="log-info">⏳ 批量模式防限流，等待 3 秒...</span></div>',
+                    '<div class="terminal-box"><span class="log-info">⏳ 批量模式防限流，等待中...</span></div>',
                     unsafe_allow_html=True,
                 )
-                time.sleep(3)
+                rate_limiter.wait()
 
-        except Exception as e:
+        except RECOVERABLE_ERRORS as e:
             err_msg = str(e)
             if "api_key" in err_msg.lower() or "sk-" in err_msg:
                 safe_msg = "AI 服务配置异常，请检查 .env 中的 API Key 设置"
@@ -70,6 +71,7 @@ def run_workflow(args: dict, log_slot):
             else:
                 safe_msg = err_msg[:100] if len(err_msg) > 100 else err_msg
 
+            logger.error(f"workflow error: {err_msg}")
             all_results.append({
                 "error_message": safe_msg,
                 "log_messages": [f"❌ 运行出错：{safe_msg}"],

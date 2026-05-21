@@ -1,6 +1,9 @@
 from pydantic import BaseModel, Field
 from utils.helpers import get_agent_llm
+from utils.llm import invoke_structured
 from core.state import AgentState
+from core import RECOVERABLE_ERRORS, AgentRole, Mode
+from utils.logger import logger
 
 
 class TargetPersona(BaseModel):
@@ -22,14 +25,13 @@ class MarketAnalysis(BaseModel):
 
 
 def market_analyzer_node(state: AgentState) -> AgentState:
-    """市场分析专家：在无目标 URL 时，基于产品卖点进行受众分析"""
     logs = list(state.get("log_messages", []))
-    logs.append("🧠 [市场分析专家] 开始基于产品卖点进行受众市场推演...")
+    log_msg = f"[{AgentRole.MARKET_ANALYZER}] 开始基于产品卖点进行受众市场推演..."
+    logs.append(log_msg)
+    logger.info(log_msg)
 
     try:
         llm = get_agent_llm("ANALYZER")
-        from langchain_core.output_parsers import PydanticOutputParser
-        parser = PydanticOutputParser(pydantic_object=MarketAnalysis)
 
         prompt = f"""你是一位顶级的 B2B 商业战略专家与市场分析师。
 请严格使用【{state.get('language', '简体中文')}】输出分析结果。
@@ -45,29 +47,30 @@ def market_analyzer_node(state: AgentState) -> AgentState:
 {state.get('icp_definition', '无')}
 
 请深入思考产品的核心价值主张，匹配到现实世界中具体的行业、公司规模和业务场景。
-输出格式必须严格遵循以下 JSON 结构：
+"""
 
-{parser.get_format_instructions()}"""
+        result: MarketAnalysis = invoke_structured(llm, prompt, MarketAnalysis)
 
-        response = llm.invoke(prompt)
-        result: MarketAnalysis = parser.parse(response.content)
-
-        logs.append("🧠 [市场分析专家] ✅ 市场受众分析完成")
+        log_msg = f"[{AgentRole.MARKET_ANALYZER}] ✅ 市场受众分析完成"
+        logs.append(log_msg)
+        logger.info(log_msg)
         for persona in result.personas:
-            logs.append(f"🧠 [市场分析专家] 识别出核心受众: {persona.persona_name}")
+            logs.append(f"[{AgentRole.MARKET_ANALYZER}] 识别出核心受众: {persona.persona_name}")
 
         return {
             **state,
-            "mode": "MARKET_ANALYSIS",
+            "mode": Mode.MARKET_ANALYSIS,
             "market_analysis": result.model_dump(),
             "log_messages": logs,
         }
 
-    except Exception as e:
-        logs.append(f"🧠 [市场分析专家] ❌ 分析失败：{str(e)[:100]}")
+    except RECOVERABLE_ERRORS as e:
+        log_msg = f"[{AgentRole.MARKET_ANALYZER}] ❌ 分析失败：{str(e)[:100]}"
+        logs.append(log_msg)
+        logger.error(log_msg)
         return {
             **state,
-            "mode": "MARKET_ANALYSIS",
+            "mode": Mode.MARKET_ANALYSIS,
             "error_message": f"市场分析失败：{str(e)}",
             "log_messages": logs,
         }

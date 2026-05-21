@@ -1,6 +1,9 @@
 from pydantic import BaseModel, Field
 from utils.helpers import get_agent_llm
+from utils.llm import invoke_structured
 from core.state import AgentState
+from core import RECOVERABLE_ERRORS, AgentRole
+from utils.logger import logger
 
 
 class EmailDraft(BaseModel):
@@ -10,14 +13,13 @@ class EmailDraft(BaseModel):
 
 
 def copywriter_node(state: AgentState) -> AgentState:
-    """破冰文案专家：撰写个性化中文开发信"""
     logs = list(state.get("log_messages", []))
-    logs.append("✍️ [文案专家] 开始撰写个性化开发信...")
+    log_msg = f"[{AgentRole.COPYWRITER}] 开始撰写个性化开发信..."
+    logs.append(log_msg)
+    logger.info(log_msg)
 
     try:
         llm = get_agent_llm("COPYWRITER")
-        from langchain_core.output_parsers import PydanticOutputParser
-        parser = PydanticOutputParser(pydantic_object=EmailDraft)
 
         profile = state["company_profile"]
         hooks_text = "\n".join(
@@ -29,7 +31,7 @@ def copywriter_node(state: AgentState) -> AgentState:
 1. 主题行：必须引用目标公司具体的近期动态（融资/产品发布/人员变动），不能泛泛而谈
 2. 开头：不以"我"或"我们"开头，先聚焦对方视角和处境
 3. 钩子：将对方具体痛点与我方方案自然连接，避免生硬的产品推销
-4. CTA：只提一个低门槛行动（如"方便下周找个15分钟聊聊吗？"）
+4. CTA：只提一个低门槛行动
 5. 长度：正文不超过200字
 6. 语气：专业但不官腔，真诚不卑不亢
 
@@ -50,14 +52,14 @@ def copywriter_node(state: AgentState) -> AgentState:
 {state.get('score_rationale', '')}
 
 请生成一封能让对方有共鸣、想回复的开发信。
+"""
 
-{parser.get_format_instructions()}"""
+        result: EmailDraft = invoke_structured(llm, prompt, EmailDraft)
 
-        response = llm.invoke(prompt)
-        result: EmailDraft = parser.parse(response.content)
-
-        logs.append("✍️ [文案专家] ✅ 开发信草稿生成完成")
-        logs.append(f"✍️ [文案专家] 主题：{result.subject}")
+        log_msg = f"[{AgentRole.COPYWRITER}] ✅ 开发信草稿生成完成"
+        logs.append(log_msg)
+        logger.info(log_msg)
+        logs.append(f"[{AgentRole.COPYWRITER}] 主题：{result.subject}")
 
         return {
             **state,
@@ -65,8 +67,10 @@ def copywriter_node(state: AgentState) -> AgentState:
             "log_messages": logs,
         }
 
-    except Exception as e:
-        logs.append(f"✍️ [文案专家] ❌ 文案生成失败：{str(e)[:100]}")
+    except RECOVERABLE_ERRORS as e:
+        log_msg = f"[{AgentRole.COPYWRITER}] ❌ 文案生成失败：{str(e)[:100]}"
+        logs.append(log_msg)
+        logger.error(log_msg)
         return {
             **state,
             "error_message": f"文案生成失败：{str(e)}",
