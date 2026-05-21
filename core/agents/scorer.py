@@ -1,5 +1,7 @@
 """
-商机打分员 — 四维固定档位评分 + Pydantic 自动校正。
+商机打分员 — 四维 × 5 档评分 + 证据锚定 + Pydantic 自动校正。
+每次 LLM 输出后 model_validator 自动将子分靠拢到最近有效档位并修正总分，
+消除「同一输入得 40 分 vs 75 分」的不确定性。
 """
 from pydantic import BaseModel, Field, model_validator
 from utils.helpers import get_agent_llm
@@ -8,39 +10,49 @@ from core.state import AgentState
 from core import RECOVERABLE_ERRORS, AgentRole
 from utils.logger import logger
 
-# 有效分数档位（LLM 只能在以下值中选择）
 VALID_TIERS = {
-    "industry_score": (0, 15, 25),
-    "pain_point_score": (0, 20, 35),
-    "size_score": (0, 10, 20),
-    "timing_score": (0, 10, 20),
+    "industry_score": (0, 6, 12, 18, 25),
+    "pain_point_score": (0, 9, 17, 26, 35),
+    "size_score": (0, 5, 10, 15, 20),
+    "timing_score": (0, 5, 10, 15, 20),
+}
+
+TIER_LABELS = {
+    "industry_score": ("完全不相关", "微弱关联", "边缘行业", "主要行业", "核心定位"),
+    "pain_point_score": ("无吻合", "1个模糊", "1个明确", "2个明确", "3+完美"),
+    "size_score": ("超出范围", "信息未知", "边界适配", "基本匹配", "最佳区间"),
+    "timing_score": ("负面动态", "无动态", "中性信号", "间接利好", "直接信号"),
 }
 
 
 def _snap_to_tier(value: int, tiers: tuple[int, ...]) -> int:
-    """将任意整数靠拢到最近的有效档位"""
     return min(tiers, key=lambda t: abs(t - value))
 
 
+def _tier_index(value: int, tiers: tuple[int, ...]) -> int:
+    return tiers.index(_snap_to_tier(value, tiers))
+
+
 def _validate_sub_score(value: int, tiers: tuple[int, ...]) -> int:
-    if value in tiers:
-        return value
-    return _snap_to_tier(value, tiers)
+    return value if value in tiers else _snap_to_tier(value, tiers)
 
 
 class LeadScore(BaseModel):
-    industry_score: int = Field(description="行业匹配度得分——只能选 0 / 15 / 25")
-    pain_point_score: int = Field(description="痛点契合度得分——只能选 0 / 20 / 35")
-    size_score: int = Field(description="规模适配度得分——只能选 0 / 10 / 20")
-    timing_score: int = Field(description="时机成熟度得分——只能选 0 / 10 / 20")
-    score: int = Field(description="综合评分，必须等于四项之和", ge=0, le=100)
-    rationale: str = Field(description="评分依据，150字以内，需引用公司具体特征")
+    industry_score: int = Field(description="行业匹配度，只能选 0/6/12/18/25")
+    industry_evidence: str = Field(description="引述公司行业/主营产品原文，论证为什么选该档位（1句话）")
+    pain_point_score: int = Field(description="痛点契合度，只能选 0/9/17/26/35")
+    pain_point_evidence: str = Field(description="引述推断痛点原文，论证与我方产品的吻合程度（1句话）")
+    size_score: int = Field(description="规模适配度，只能选 0/5/10/15/20")
+    size_evidence: str = Field(description="引述公司规模/融资阶段原文，论证与ICP的匹配程度（1句话）")
+    timing_score: int = Field(description="时机成熟度，只能选 0/5/10/15/20")
+    timing_evidence: str = Field(description="引述近期新闻/动态原文，论证当前是否存在采购信号（1句话）")
+    score: int = Field(description="综合评分 = 四维校正后之和", ge=0, le=100)
+    rationale: str = Field(description="整体判断依据，150字以内引用公司具体特征")
     key_hooks: list[str] = Field(description="销售切入点，2-3条，每条20字以内")
 
     @model_validator(mode="after")
     def enforce_scoring_rules(self):
         corrections = {}
-
         for field_name, tiers in VALID_TIERS.items():
             raw = getattr(self, field_name)
             corrected = _validate_sub_score(raw, tiers)
@@ -59,10 +71,25 @@ class LeadScore(BaseModel):
             self.score = computed
 
         if corrections:
-            logger.info(
-                f"[SCORER] 自动校正评分: {corrections}"
-            )
+            logger.info(f"[SCORER] 自动校正: {corrections}")
         return self
+
+
+def _build_tier_table() -> str:
+    lines = []
+    for dim, tiers in VALID_TIERS.items():
+        labels = TIER_LABELS[dim]
+        dim_cn = {
+            "industry_score": "行业匹配度",
+            "pain_point_score": "痛点契合度",
+            "size_score": "规模适配度",
+            "timing_score": "时机成熟度",
+        }[dim]
+        row = " | ".join(
+            f"{score}分={label}" for score, label in zip(tiers, labels)
+        )
+        lines.append(f"{dim_cn}: {row}")
+    return "\n".join(lines)
 
 
 def scorer_node(state: AgentState) -> AgentState:
@@ -71,52 +98,59 @@ def scorer_node(state: AgentState) -> AgentState:
     if state.get("error_message"):
         return state
 
-    log_msg = f"[{AgentRole.SCORER}] 开始评估商机质量..."
+    log_msg = f"[{AgentRole.SCORER}] 开始评估商机质量（5档 × 4维）..."
     logs.append(log_msg)
     logger.info(log_msg)
 
     try:
         llm = get_agent_llm("SCORER")
         profile = state["company_profile"]
-        prompt = f"""你是一位经验丰富的B2B销售顾问，请评估这条销售线索的质量。
 
-【我方产品卖点】
+        prompt = f"""你是 B2B 销售线索评分专家。请先读目标公司档案，再逐维给出证据和分数。
+
+【我方产品】
 {state['product_desc']}
 
-【理想客户画像 (ICP)】
+【ICP 画像】
 {state['icp_definition']}
 
 【目标公司档案】
-公司：{profile.get('company_name')} | 行业：{profile.get('industry')} | 规模：{profile.get('company_size')}
-融资阶段：{profile.get('funding_stage')}
-核心产品：{', '.join(profile.get('main_products', []))}
-近期动态：{', '.join(profile.get('recent_news', []))}
-推断痛点：{', '.join(profile.get('pain_points_inferred', []))}
+公司={profile.get('company_name')} | 行业={profile.get('industry')} | 规模={profile.get('company_size')}
+融资={profile.get('funding_stage')}
+核心产品={', '.join(profile.get('main_products', []))}
+近期动态={', '.join(profile.get('recent_news', []))}
+推断痛点={', '.join(profile.get('pain_points_inferred', []))}
 
-请严格按以下四个维度的【固定档位】评分，每个维度只能从给定选项中选择一个整数：
-1. industry_score: 只能选 {VALID_TIERS['industry_score']}
-2. pain_point_score: 只能选 {VALID_TIERS['pain_point_score']}
-3. size_score: 只能选 {VALID_TIERS['size_score']}
-4. timing_score: 只能选 {VALID_TIERS['timing_score']}
+============================================================
+【四维 × 5 档评分表】每个维度的分数只能从该行的固定值中选择：
+============================================================
+{_build_tier_table()}
+============================================================
 
-score 必须等于上述四项之和。
-即使你觉得某个值"接近"也对，系统会自动修正到最近的有效档位。请优先确保你的判断逻辑自洽。
-"""
+【两步法评分流程】
+第一步：对每个维度，从档案中引述一句事实作为证据。
+第二步：根据证据，从对应行的固定值中选择最匹配的分数。
+
+evidence 字段必须引用档案中已有的原文信息，不能编造。
+score 必须等于四维分数之和。"""
 
         result: LeadScore = invoke_structured(llm, prompt, LeadScore)
         should_proceed = result.score > 60
 
-        log_msg = f"[{AgentRole.SCORER}] ✅ 评分完成：{result.score}/100  (行业{result.industry_score}+痛点{result.pain_point_score}+规模{result.size_score}+时机{result.timing_score})"
+        log_msg = (
+            f"[{AgentRole.SCORER}] ✅ {result.score}/100  "
+            f"行业{result.industry_score}({result.industry_evidence[:20]}…) "
+            f"+痛点{result.pain_point_score}({result.pain_point_evidence[:20]}…) "
+            f"+规模{result.size_score}({result.size_evidence[:20]}…) "
+            f"+时机{result.timing_score}({result.timing_evidence[:20]}…)"
+        )
         logs.append(log_msg)
         logger.info(log_msg)
-        logs.append(f"[{AgentRole.SCORER}] 依据：{result.rationale[:80]}...")
 
         if should_proceed:
-            logs.append(f"[{AgentRole.SCORER}] ✅ 评分合格（>60），移交文案专家")
-            logger.info(log_msg)
+            logs.append(f"[{AgentRole.SCORER}] ✅ ≥60分，移交文案专家")
         else:
-            logs.append(f"[{AgentRole.SCORER}] ⛔ 评分不足60分，终止流程，节省 API 成本")
-            logger.info(log_msg)
+            logs.append(f"[{AgentRole.SCORER}] ⛔ <60分，终止以节省 API")
 
         return {
             **state,
@@ -128,7 +162,7 @@ score 必须等于上述四项之和。
         }
 
     except RECOVERABLE_ERRORS as e:
-        log_msg = f"[{AgentRole.SCORER}] ❌ 评分失败：{str(e)[:100]}"
+        log_msg = f"[{AgentRole.SCORER}] ❌ 失败：{str(e)[:100]}"
         logs.append(log_msg)
         logger.error(log_msg)
         return {
