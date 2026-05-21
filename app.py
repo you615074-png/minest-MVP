@@ -105,45 +105,82 @@ with st.sidebar:
 
     st.divider()
     with st.expander("📧 邮件发送配置"):
-        if is_authenticated():
+        if not is_authenticated():
+            st.caption("请先登录后配置")
+        else:
             uid = st.session_state.current_user["id"]
             cfg = get_email_config(uid)
-            smtp_host = st.text_input("SMTP 服务器", value=cfg["smtp_host"] if cfg else "", placeholder="smtp.qq.com", key="ec_host")
-            smtp_port = st.number_input("端口", value=cfg["smtp_port"] if cfg else 465, min_value=1, max_value=65535, key="ec_port")
-            smtp_user = st.text_input("发件邮箱", value=cfg["smtp_user"] if cfg else "", placeholder="your@email.com", key="ec_user")
-            smtp_pass = st.text_input("SMTP 授权码", type="password", placeholder="留空则不修改", key="ec_pass")
+
+            EMAIL_PRESETS = {
+                "QQ 邮箱": ("smtp.qq.com", 465),
+                "163 邮箱": ("smtp.163.com", 465),
+                "Gmail": ("smtp.gmail.com", 587),
+                "Outlook": ("smtp-mail.outlook.com", 587),
+                "其他": ("", 465),
+            }
+            preset_names = list(EMAIL_PRESETS.keys())
+            saved_preset = "其他"
+            if cfg:
+                for name, (host, port) in EMAIL_PRESETS.items():
+                    if cfg["smtp_host"] == host and cfg["smtp_port"] == port and host:
+                        saved_preset = name
+                        break
+
+            preset = st.selectbox("你用什么邮箱发送？", preset_names, index=preset_names.index(saved_preset), key="ec_preset")
+            auto_host, auto_port = EMAIL_PRESETS[preset]
+            custom = (preset == "其他")
+
+            smtp_host = st.text_input("SMTP 服务器地址", value=auto_host if not cfg else cfg["smtp_host"], disabled=not custom, key="ec_host")
+            smtp_port = st.number_input("端口", value=auto_port if not cfg else cfg["smtp_port"], min_value=1, max_value=65535, disabled=not custom, key="ec_port")
+
+            smtp_user = st.text_input("邮箱账号", value=cfg["smtp_user"] if cfg else "", placeholder="your@qq.com", key="ec_user")
+            smtp_pass = st.text_input("授权码", type="password", placeholder="留空则不修改", key="ec_pass")
+            with st.expander("ℹ️ 如何获取授权码？"):
+                st.markdown("""
+                **QQ 邮箱**：登录 mail.qq.com → 设置 → 账户 → POP3/SMTP 服务 → 开启 → 生成授权码  
+                **163 邮箱**：登录 mail.163.com → 设置 → POP3/SMTP/IMAP → 开启 → 新增授权码  
+                **Gmail**：Google 账户 → 安全 → 两步验证 → 应用专用密码  
+                **Outlook**：Microsoft 账户 → 安全 → 高级安全选项 → 应用密码  
+                **飞书企业邮箱**：联系公司 IT 管理员获取
+                """)
             sender_name = st.text_input("发件人名称", value=cfg["sender_name"] if cfg else "AI SDR", key="ec_name")
+
             col_save, col_test, col_del = st.columns([2, 2, 1])
             with col_save:
                 if st.button("💾 保存配置", use_container_width=True):
-                    if not smtp_host or not smtp_user:
-                        st.error("SMTP 服务器和发件邮箱为必填项")
+                    if not smtp_user:
+                        st.error("邮箱账号为必填项")
                     elif not smtp_pass and not cfg:
-                        st.error("首次配置需填写 SMTP 授权码")
+                        st.error("首次配置需填写授权码")
                     else:
+                        final_host = auto_host if preset != "其他" else smtp_host
+                        final_port = auto_port if preset != "其他" else smtp_port
                         final_pass = smtp_pass if smtp_pass else (decrypt(cfg["smtp_pass_encrypted"], cfg["smtp_pass_salt"], uid) if cfg else "")
                         if not final_pass:
-                            st.error("无法获取 SMTP 密码，请重新输入")
+                            st.error("无法获取授权码，请重新输入")
                         else:
                             enc_pw, salt = encrypt(final_pass, uid)
-                            save_email_config(uid, smtp_host, smtp_port, smtp_user, enc_pw, salt, sender_name)
+                            save_email_config(uid, final_host, final_port, smtp_user, enc_pw, salt, sender_name)
                             st.success("✅ 邮件配置已保存")
             with col_test:
-                if st.button("📤 测试发送", use_container_width=True, help="发送测试邮件到发件邮箱"):
-                    if not cfg and not smtp_host:
+                if st.button("📤 测试发送", use_container_width=True, help="发送测试邮件到你的邮箱"):
+                    if not cfg and preset == "其他" and not smtp_host:
                         st.error("请先保存配置")
                     else:
                         from utils.mailer import send_email
-                        h = cfg["smtp_host"] if cfg else smtp_host
-                        p = cfg["smtp_port"] if cfg else smtp_port
+                        h = auto_host if preset != "其他" else (cfg["smtp_host"] if cfg else smtp_host)
+                        p = auto_port if preset != "其他" else (cfg["smtp_port"] if cfg else smtp_port)
                         u = cfg["smtp_user"] if cfg else smtp_user
                         pw = decrypt(cfg["smtp_pass_encrypted"], cfg["smtp_pass_salt"], uid) if cfg else smtp_pass
                         n = cfg["sender_name"] if cfg else sender_name
-                        ok, msg = send_email(u, "AI SDR 测试邮件", "这是一封来自 AI SDR 数字团队的测试邮件。", "", h, p, u, pw, n)
-                        if ok:
-                            st.success(msg)
+                        if not pw:
+                            st.error("请先保存配置")
                         else:
-                            st.error(msg)
+                            ok, msg = send_email(u, "AI SDR 测试邮件", "这是一封来自 AI SDR 数字团队的测试邮件，配置正确即可收到。", "", h, p, u, pw, n)
+                            if ok:
+                                st.success(msg)
+                            else:
+                                st.error(msg)
             with col_del:
                 if st.button("🗑", key="del_ec", help="删除配置"):
                     delete_email_config(uid)
