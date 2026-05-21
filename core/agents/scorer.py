@@ -105,6 +105,18 @@ def scorer_node(state: AgentState) -> AgentState:
     try:
         llm = get_agent_llm("SCORER")
         profile = state["company_profile"]
+        raw_data_len = len(state.get("company_raw_data", ""))
+        low_data = raw_data_len < 200 or not profile.get("company_name")
+
+        if low_data:
+            logger.warning(f"[SCORER] 原始数据不足({raw_data_len}字符)，降级为宽松评分")
+            logs.append(f"[{AgentRole.SCORER}] ⚠️ 目标公司信息不足，使用行业常识推断")
+
+        mode_hint = (
+            "⚠️ 目标公司档案信息严重不足。如果某维度确实没有任何可引述的事实，请在 evidence 字段中填写「信息不足，(推断)」然后选择 Tier 1（最低非零档）。\n"
+            if low_data
+            else ""
+        )
 
         prompt = f"""你是 B2B 销售线索评分专家。请先读目标公司档案，再逐维给出证据和分数。
 
@@ -130,8 +142,8 @@ def scorer_node(state: AgentState) -> AgentState:
 【两步法评分流程】
 第一步：对每个维度，从档案中引述一句事实作为证据。
 第二步：根据证据，从对应行的固定值中选择最匹配的分数。
-
-evidence 字段必须引用档案中已有的原文信息，不能编造。
+{mode_hint}
+evidence 字段必须优先引用档案中已有的原文信息。仅在完全无法找到相关信息时才可标注「(推断)」。
 score 必须等于四维分数之和。"""
 
         result: LeadScore = invoke_structured(llm, prompt, LeadScore)

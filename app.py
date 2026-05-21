@@ -60,36 +60,46 @@ with st.sidebar:
     else:
         uid = st.session_state.current_user["id"]
 
-        search_kw = st.text_input("搜索历史", placeholder="输入关键词...", key="hist_search")
-        records = search_user_history(uid, search_kw) if search_kw else get_user_history(uid)
-
-        if not records:
-            st.caption("暂无记录，快去生成第一条分析吧！")
+        if st.session_state.is_running:
+            st.warning("⏳ 任务运行中，历史暂不可用")
         else:
-            st.caption(f"共 {len(records)} 条记录 (最多保留50条)")
-            for r in records:
-                mode = r.get("mode")
-                date_str = r.get("created_at")[:16]
+            search_kw = st.text_input("搜索历史", placeholder="输入关键词...", key="hist_search")
+            records = search_user_history(uid, search_kw) if search_kw else get_user_history(uid)
 
-                if mode == "MARKET_ANALYSIS":
-                    icon = "🎯"
-                    title = "受众分析"
-                else:
-                    score = r.get("full_result", {}).get("lead_score", 0)
-                    icon = "🟢" if score > 60 else ("🔴" if score > 0 else "⚪")
-                    comp = r.get("full_result", {}).get("company_profile", {}).get("company_name", "未知")
-                    title = f"{comp}"
+            if not records:
+                st.caption("暂无记录，快去生成第一条分析吧！")
+            else:
+                st.caption(f"共 {len(records)} 条记录 (最多保留50条)")
+                for r in records:
+                    mode = r.get("mode")
+                    date_str = r.get("created_at")[:16]
 
-                st.markdown(history_item(icon, title, date_str), unsafe_allow_html=True)
+                    if mode == "MARKET_ANALYSIS":
+                        icon = "🎯"
+                        title = "受众分析"
+                    else:
+                        score = r.get("full_result", {}).get("lead_score", 0)
+                        icon = "🟢" if score > 60 else ("🔴" if score > 0 else "⚪")
+                        comp = r.get("full_result", {}).get("company_profile", {}).get("company_name", "未知")
+                        title = f"{comp}"
 
-                col_view, col_del = st.columns([2, 1])
-                with col_view:
-                    if st.button("查看详情", key=f"btn_{r['id']}", use_container_width=True):
-                        st.session_state.current_result = r.get("full_result")
-                with col_del:
-                    if st.button("🗑", key=f"del_{r['id']}", help="删除此记录"):
-                        delete_history(r["id"], uid)
-                        st.rerun()
+                    st.markdown(history_item(icon, title, date_str), unsafe_allow_html=True)
+
+                    col_view, col_del = st.columns([2, 1])
+                    with col_view:
+                        if st.button("查看详情", key=f"btn_{r['id']}", use_container_width=True):
+                            st.session_state.current_result = r.get("full_result")
+                            fr = r.get("full_result", {})
+                            st.session_state.product_desc = fr.get("product_desc", "")
+                            st.session_state.icp_definition = fr.get("icp_definition", "")
+                            st.session_state.target_url = fr.get("target_url", "")
+                            st.session_state.output_lang = fr.get("language", "简体中文")
+                            st.session_state._viewing_history = True
+                            st.rerun()
+                    with col_del:
+                        if st.button("🗑", key=f"del_{r['id']}", help="删除此记录"):
+                            delete_history(r["id"], uid)
+                            st.rerun()
 
     st.divider()
     with st.expander("🔧 系统状态"):
@@ -113,23 +123,33 @@ left_col, right_col = st.columns([1, 1.5], gap="large")
 with left_col.container(height=800, border=False):
     st.markdown('<div class="section-title">📥 配置控制台</div>', unsafe_allow_html=True)
 
+    viewing = st.session_state.get("_viewing_history", False)
+    if viewing:
+        st.info("📋 正在查看历史记录 — 输入已锁定")
+        if st.button("🆕 开启新分析", type="primary", use_container_width=True):
+            st.session_state._viewing_history = False
+            st.session_state.current_result = None
+            st.rerun()
+
     st.caption("🎬 没想好填什么？选一个场景，三行自动填好，点按钮就能看效果：")
     prefill_col1, prefill_col2 = st.columns(2)
     with prefill_col1:
-        if st.button("📋 分析 SaaS 公司的销售线索", use_container_width=True, key="q1",
-                     help="自动填入 CRM 产品 + Intercom 目标网址"):
+        if st.button("📋 高分示例：飞书 → 生成开发信", use_container_width=True, key="q1",
+                     help="AI CRM 系统 + 飞书 (SaaS) → 预期高分生成开发信", disabled=viewing):
             st.session_state.product_desc = "企业级AI CRM系统，帮助B2B销售团队管理客户关系、自动化跟进流程。目标客群为50-500人的SaaS企业。已服务200+客户，核心优势是AI驱动的销售预测和自动化邮件序列。"
             st.session_state.icp_definition = "SaaS公司，50-200人规模，有销售团队"
-            st.session_state.target_url = "https://www.intercom.com"
+            st.session_state.target_url = "https://www.feishu.cn"
             st.session_state._prefill_done = True
+            st.session_state._viewing_history = False
             st.rerun()
     with prefill_col2:
-        if st.button("🛒 分析跨境电商的客户画像", use_container_width=True, key="q2",
-                     help="自动填入 ERP 产品 + Shopify 目标网址"):
-            st.session_state.product_desc = "跨境电商ERP SaaS平台，支持多平台订单管理、库存同步、物流追踪。服务于东南亚市场的跨境电商卖家，日均处理订单10万+。"
-            st.session_state.icp_definition = "跨境电商卖家，年GMV 100万美元以上"
-            st.session_state.target_url = "https://www.shopify.com"
+        if st.button("📋 低分示例：B站 → 自动终止", use_container_width=True, key="q2",
+                     help="AI CRM 系统 + B站 (视频娱乐) → 预期低分自动终止", disabled=viewing):
+            st.session_state.product_desc = "企业级AI CRM系统，帮助B2B销售团队管理客户关系、自动化跟进流程。目标客群为50-500人的SaaS企业。已服务200+客户，核心优势是AI驱动的销售预测和自动化邮件序列。"
+            st.session_state.icp_definition = "SaaS公司，50-200人规模，有销售团队"
+            st.session_state.target_url = "https://www.bilibili.com"
             st.session_state._prefill_done = True
+            st.session_state._viewing_history = False
             st.rerun()
     if st.session_state.get("_prefill_done"):
         st.success("✅ 已填入演示数据，点击下方「一键生成」即可查看分析效果")
@@ -140,6 +160,7 @@ with left_col.container(height=800, border=False):
         height=130,
         max_chars=2000,
         key="product_desc",
+        disabled=viewing,
     )
 
     col_icp, col_lang = st.columns([2, 1])
@@ -149,12 +170,14 @@ with left_col.container(height=800, border=False):
             placeholder="例：有出海需求的SaaS企业",
             max_chars=500,
             key="icp_definition",
+            disabled=viewing,
         )
     with col_lang:
         output_lang = st.selectbox(
             "🌐 输出语言",
             ["简体中文", "English", "日本語", "Español"],
             key="output_lang",
+            disabled=viewing,
         )
 
     tab_single, tab_batch = st.tabs(["📌 单条开发", "🗂️ 批量处理 (CSV/Excel)"])
@@ -165,9 +188,10 @@ with left_col.container(height=800, border=False):
             placeholder="https://example.com (留空则分析潜在市场)",
             max_chars=500,
             key="target_url",
+            disabled=viewing,
         )
 
-        run_disabled = st.session_state.is_running
+        run_disabled = st.session_state.is_running or viewing
         btn_text = "🚀 一键生成开发信" if target_url.strip() else "🎯 智能分析目标受众"
 
         run_btn = st.button(
