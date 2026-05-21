@@ -117,18 +117,18 @@ with left_col.container(height=800, border=False):
     prefill_col1, prefill_col2 = st.columns(2)
     with prefill_col1:
         if st.button("📋 分析 SaaS 公司的销售线索", use_container_width=True, key="q1",
-                     help="自动填入 CRM 产品描述 + Intercom 目标网址"):
-            st.session_state._prefill_product = "企业级AI CRM系统，帮助B2B销售团队管理客户关系、自动化跟进流程。目标客群为50-500人的SaaS企业。已服务200+客户，核心优势是AI驱动的销售预测和自动化邮件序列。"
-            st.session_state._prefill_icp = "SaaS公司，50-200人规模，有销售团队"
-            st.session_state._prefill_url = "https://www.intercom.com"
+                     help="自动填入 CRM 产品 + Intercom 目标网址"):
+            st.session_state.product_desc = "企业级AI CRM系统，帮助B2B销售团队管理客户关系、自动化跟进流程。目标客群为50-500人的SaaS企业。已服务200+客户，核心优势是AI驱动的销售预测和自动化邮件序列。"
+            st.session_state.icp_definition = "SaaS公司，50-200人规模，有销售团队"
+            st.session_state.target_url = "https://www.intercom.com"
             st.session_state._prefill_done = True
             st.rerun()
     with prefill_col2:
         if st.button("🛒 分析跨境电商的客户画像", use_container_width=True, key="q2",
-                     help="自动填入 ERP 产品描述 + Shopify 目标网址"):
-            st.session_state._prefill_product = "跨境电商ERP SaaS平台，支持多平台订单管理、库存同步、物流追踪。服务于东南亚市场的跨境电商卖家，日均处理订单10万+。"
-            st.session_state._prefill_icp = "跨境电商卖家，年GMV 100万美元以上"
-            st.session_state._prefill_url = "https://www.shopify.com"
+                     help="自动填入 ERP 产品 + Shopify 目标网址"):
+            st.session_state.product_desc = "跨境电商ERP SaaS平台，支持多平台订单管理、库存同步、物流追踪。服务于东南亚市场的跨境电商卖家，日均处理订单10万+。"
+            st.session_state.icp_definition = "跨境电商卖家，年GMV 100万美元以上"
+            st.session_state.target_url = "https://www.shopify.com"
             st.session_state._prefill_done = True
             st.rerun()
     if st.session_state.get("_prefill_done"):
@@ -140,7 +140,6 @@ with left_col.container(height=800, border=False):
         height=130,
         max_chars=2000,
         key="product_desc",
-        value=st.session_state.get("_prefill_product", ""),
     )
 
     col_icp, col_lang = st.columns([2, 1])
@@ -150,7 +149,6 @@ with left_col.container(height=800, border=False):
             placeholder="例：有出海需求的SaaS企业",
             max_chars=500,
             key="icp_definition",
-            value=st.session_state.get("_prefill_icp", ""),
         )
     with col_lang:
         output_lang = st.selectbox(
@@ -167,7 +165,6 @@ with left_col.container(height=800, border=False):
             placeholder="https://example.com (留空则分析潜在市场)",
             max_chars=500,
             key="target_url",
-            value=st.session_state.get("_prefill_url", ""),
         )
 
         run_disabled = st.session_state.is_running
