@@ -101,16 +101,18 @@ def _render_sdr_result(result: dict):
         st.divider()
         st.markdown(section_title("✉️ 开发信草稿"), unsafe_allow_html=True)
 
-        st.session_state.email_subject = redact_secrets(email.get("subject", ""))
-        st.text_input("📌 邮件主题", key="email_subject")
-
         body_val = email.get("body", "")
         result_fingerprint = hash(repr(result.get("email_draft", {})))
         if st.session_state.get("_last_email_fp") != result_fingerprint:
+            st.session_state.pop("email_body", None)
+            st.session_state.pop("email_subject", None)
             if not body_val or len(body_val.strip()) < 5:
                 body_val = "（开发信正文生成异常，请联系管理员）"
             st.session_state.email_body = redact_secrets(body_val)
+            st.session_state.email_subject = redact_secrets(email.get("subject", ""))
             st.session_state._last_email_fp = result_fingerprint
+
+        st.text_input("📌 邮件主题", key="email_subject")
 
         st.markdown(section_title("📝 邮件正文"), unsafe_allow_html=True)
         st.text_area("编辑邮件正文", key="email_body", height=180, label_visibility="collapsed")
