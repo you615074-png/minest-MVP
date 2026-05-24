@@ -270,6 +270,15 @@ with left_col.container(height=800, border=False):
             disabled=viewing,
         )
 
+    with st.expander("✏️ 邮件风格", expanded=False):
+        st_style = st.session_state.get("_email_style", {"tone": "亲切", "length": "150", "opening": "动态", "cta": "电话"})
+        tone = st.selectbox("语气", ["真诚亲切", "专业正式", "简洁直接"], index=["真诚亲切", "专业正式", "简洁直接"].index(st_style.get("tone", "真诚亲切")), key="es_tone", disabled=viewing)
+        length = st.selectbox("长度", ["100-200字", "50-100字", "200-300字"], index=["100-200字", "50-100字", "200-300字"].index(st_style.get("length", "100-200字")), key="es_len", disabled=viewing)
+        opening = st.selectbox("开头方式", ["引用近期动态", "直接切入痛点", "赞美对方成就"], index=["引用近期动态", "直接切入痛点", "赞美对方成就"].index(st_style.get("opening", "引用近期动态")), key="es_open", disabled=viewing)
+        cta = st.selectbox("行动号召", ["约15分钟通话", "发送产品Demo", "邀请免费试用"], index=["约15分钟通话", "发送产品Demo", "邀请免费试用"].index(st_style.get("cta", "约15分钟通话")), key="es_cta", disabled=viewing)
+        if not viewing:
+            st.session_state._email_style = {"tone": tone, "length": length, "opening": opening, "cta": cta}
+
     tab_single, tab_batch = st.tabs(["📌 单条开发", "🗂️ 批量处理 (CSV/Excel)"])
 
     with tab_single:
@@ -303,14 +312,16 @@ with left_col.container(height=800, border=False):
                     "product_desc": product_desc[:2000],
                     "icp_definition": icp_definition or "不限行业和规模",
                     "target_url": target_url.strip()[:500],
+                    "target_email": "",
                     "language": output_lang,
+                    "email_style": st.session_state.get("_email_style", {}),
                     "batch_mode": False,
                 }
                 st.rerun()
 
     with tab_batch:
         st.info("批量处理会自动遍历名单，提取官网进行分析。最大 2MB，最多 50 行。")
-        st.download_button("📥 下载 CSV 模板", data="url\nhttps://www.feishu.cn\nhttps://www.deepseek.com\n", file_name="batch_template.csv", mime="text/csv", key="csv_tpl")
+        st.download_button("📥 下载 CSV 模板", data="url,email\nhttps://www.feishu.cn,partner@feishu.cn\nhttps://www.deepseek.com,contact@deepseek.com\n", file_name="batch_template.csv", mime="text/csv", key="csv_tpl")
         uploaded_file = st.file_uploader(
             "上传包含 'url' 或 '网址' 列的文件",
             type=["csv", "xlsx"],
@@ -339,15 +350,19 @@ with left_col.container(height=800, border=False):
                         df = pd.read_excel(uploaded_file)
 
                     url_col = None
+                    email_col = None
                     for col in df.columns:
-                        if "url" in str(col).lower() or "网址" in str(col):
+                        c = str(col).lower()
+                        if url_col is None and ("url" in c or "网址" in c):
                             url_col = col
-                            break
+                        if email_col is None and ("email" in c or "邮箱" in c or "mail" in c):
+                            email_col = col
 
                     if not url_col:
                         st.error("未找到名为 'url' 或 '网址' 的列！")
                     else:
                         urls = df[url_col].dropna().astype(str).tolist()
+                        emails = df[email_col].dropna().astype(str).tolist() if email_col else []
                         valid_urls = [u for u in urls if u.startswith("http") or "." in u]
 
                         if len(valid_urls) > 50:
@@ -364,6 +379,7 @@ with left_col.container(height=800, border=False):
                                 "product_desc": product_desc[:2000],
                                 "icp_definition": icp_definition or "不限行业和规模",
                                 "target_urls": valid_urls,
+                                "target_emails": emails[:len(valid_urls)] if emails else [],
                                 "language": output_lang,
                                 "batch_mode": True,
                             }

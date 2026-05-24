@@ -6,7 +6,9 @@ class AgentState(TypedDict):
     product_desc: str
     icp_definition: str
     target_url: str
+    target_email: str
     language: str
+    email_style: dict
 
     # Agent 产出
     company_raw_data: str

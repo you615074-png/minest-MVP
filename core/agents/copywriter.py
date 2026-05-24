@@ -27,13 +27,24 @@ def copywriter_node(state: AgentState) -> AgentState:
         )
 
         prompt = f"""你是一位顶级B2B销售文案专家，擅长撰写高打开率的开发信。
-请严格使用【{state.get('language', '简体中文')}】撰写邮件，并且遵守以下规则：
-1. 主题行：必须引用目标公司具体的近期动态（融资/产品发布/人员变动），不能泛泛而谈
-2. 开头：不以"我"或"我们"开头，先聚焦对方视角和处境
-3. 钩子：将对方具体痛点与我方方案自然连接，避免生硬的产品推销
-4. CTA：只提一个低门槛行动
-5. 长度：正文不超过200字
-6. 语气：专业但不官腔，真诚不卑不亢
+请严格使用【{state.get('language', '简体中文')}】撰写邮件，并且遵守以下风格设定：
+"""
+
+        email_style = state.get("email_style", {})
+        tone = email_style.get("tone", "亲切")
+        length_text = email_style.get("length", "100-200字")
+        opening = email_style.get("opening", "引用近期动态")
+        cta_text = email_style.get("cta", "约15分钟通话")
+
+        tone_map = {"真诚亲切": "真诚不卑不亢", "专业正式": "专业严谨，用数据说话", "简洁直接": "言简意赅，直击核心"}
+        open_map = {"引用近期动态": "先引用目标公司最近的新闻/动态作为话题入口", "直接切入痛点": "开门见山指出对方可能的业务痛点", "赞美对方成就": "先认可对方行业地位或近期成就"}
+        cta_map = {"约15分钟通话": "约15分钟简短沟通", "发送产品Demo": "提供产品演示链接", "邀请免费试用": "邀请对方免费试用"}
+
+        prompt += f"""1. 语气：{tone_map.get(tone, tone)}
+2. 开头：{open_map.get(opening, opening)}
+3. CTA：{cta_map.get(cta_text, cta_text)}
+4. 长度：正文{length_text}
+5. 不要以"我"或"我们"开头
 
 【目标公司信息】
 公司名称：{profile.get('company_name')}

@@ -111,23 +111,11 @@ def _render_sdr_result(result: dict):
             st.session_state.email_body = redact_secrets(body_val)
             st.session_state._email_dirty = True
 
-        st.markdown("<br>" + section_title("📝 邮件正文"), unsafe_allow_html=True)
-        body_display = st.session_state.get("email_body", body_val)
-
-        copy_html = f'<div style="margin-bottom:8px;"><button onclick="navigator.clipboard.writeText(`{body_display}`)" style="background:#30363d;border:1px solid #484f58;color:#c9d1d9;border-radius:6px;padding:4px 12px;cursor:pointer;font-size:12px;">📋 复制正文</button></div>'
-        st.markdown(copy_html, unsafe_allow_html=True)
-
-        st.markdown(
-            f"<div style='background:#161b22;border:1px solid #30363d;border-radius:10px;"
-            f"padding:16px 20px;line-height:1.9;color:#e0e7ef;font-size:14px;"
-            f"white-space:pre-wrap;min-height:60px;'>{redact_secrets(body_display)}</div>",
-            unsafe_allow_html=True,
-        )
-        with st.expander("✏️ 编辑正文"):
-            st.text_area("编辑邮件正文", key="email_body", height=220, label_visibility="collapsed")
+        st.markdown(section_title("📝 邮件正文"), unsafe_allow_html=True)
+        st.text_area("编辑邮件正文", key="email_body", height=180, label_visibility="collapsed")
         st.caption(f"📄 正文 {len(body_val)} 字 | 主题 {len(email.get('subject', ''))} 字")
 
-        st.text_input("📧 收件人邮箱", placeholder="partner@company.com", key="target_email")
+        st.text_input("📧 收件人邮箱", value=result.get("target_email", ""), placeholder="partner@company.com", key="target_email")
 
         email_cfg = get_email_config(st.session_state.current_user["id"]) if st.session_state.current_user else None
         send_disabled = not email_cfg
