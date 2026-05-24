@@ -103,16 +103,21 @@ def _render_sdr_result(result: dict):
 
         body_val = email.get("body", "")
         result_fingerprint = hash(repr(result.get("email_draft", {})))
-        if st.session_state.get("_last_email_fp") != result_fingerprint:
-            st.session_state.pop("email_body", None)
-            st.session_state.pop("email_subject", None)
-            if not body_val or len(body_val.strip()) < 5:
-                body_val = "（开发信正文生成异常，请联系管理员）"
-            st.session_state.email_body = redact_secrets(body_val)
-            st.session_state.email_subject = redact_secrets(email.get("subject", ""))
-            st.session_state._last_email_fp = result_fingerprint
 
-        st.text_input("📌 邮件主题", key="email_subject")
+        if not body_val or len(body_val.strip()) < 5:
+            body_val = "（开发信正文生成异常，请联系管理员）"
+
+        st.text_input("📌 邮件主题", value=redact_secrets(email.get("subject", "")), key="email_subject")
+
+        st.markdown(section_title("📝 邮件正文"), unsafe_allow_html=True)
+        st.markdown(
+            f"<div style='background:#161b22;border:1px solid #30363d;border-radius:10px;"
+            f"padding:16px 20px;line-height:1.9;color:#e0e7ef;font-size:14px;"
+            f"white-space:pre-wrap;min-height:60px;'>{redact_secrets(body_val)}</div>",
+            unsafe_allow_html=True,
+        )
+        with st.expander("✏️ 编辑正文"):
+            st.text_area("编辑邮件正文", value=redact_secrets(body_val), key=f"edit_body_{result_fingerprint}", height=180, label_visibility="collapsed")
 
         st.markdown(section_title("📝 邮件正文"), unsafe_allow_html=True)
         st.text_area("编辑邮件正文", key="email_body", height=180, label_visibility="collapsed")

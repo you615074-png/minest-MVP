@@ -161,6 +161,7 @@ with st.sidebar:
                             enc_pw, salt = encrypt(final_pass, uid)
                             save_email_config(uid, final_host, final_port, smtp_user, enc_pw, salt, sender_name)
                             st.success("✅ 邮件配置已保存")
+                            st.rerun()
             with col_test:
                 if st.button("📤 测试发送", use_container_width=True, help="发送测试邮件到你的邮箱"):
                     from utils.mailer import send_email
