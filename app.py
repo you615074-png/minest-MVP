@@ -158,11 +158,13 @@ with st.sidebar:
             auto_host, auto_port = EMAIL_PRESETS[preset]
             custom = (preset == "其他")
 
-            smtp_host = st.text_input("SMTP 服务器地址", value=auto_host if not cfg else cfg["smtp_host"], disabled=not custom, key="ec_host")
-            smtp_port = st.number_input("端口", value=auto_port if not cfg else cfg["smtp_port"], min_value=1, max_value=65535, disabled=not custom, key="ec_port")
+            smtp_host = st.text_input("SMTP 服务器地址", value=cfg["smtp_host"] if cfg else auto_host, disabled=not custom, key="ec_host")
+            smtp_port = st.number_input("端口", value=cfg["smtp_port"] if cfg else auto_port, min_value=1, max_value=65535, disabled=not custom, key="ec_port")
 
             smtp_user = st.text_input("邮箱账号", value=cfg["smtp_user"] if cfg else "", placeholder="your@qq.com", key="ec_user")
-            smtp_pass = st.text_input("授权码", type="password", placeholder="留空则不修改", key="ec_pass")
+            smtp_pass = st.text_input("授权码", type="password", placeholder="留空则不修改" if cfg else "请输入授权码", key="ec_pass")
+            if cfg and not smtp_pass:
+                st.caption("✅ 授权码已加密保存，如需修改请输入新授权码")
             with st.expander("ℹ️ 如何获取授权码？"):
                 st.markdown("""
                 **QQ 邮箱**：登录 mail.qq.com → 设置 → 账户 → POP3/SMTP 服务 → 开启 → 生成授权码  
