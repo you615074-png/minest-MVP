@@ -119,6 +119,8 @@ def _render_sdr_result(result: dict):
             f"white-space:pre-wrap;min-height:60px;'>{redact_secrets(body_display)}</div>",
             unsafe_allow_html=True,
         )
+        with st.expander("✏️ 编辑正文"):
+            st.text_area("编辑邮件正文", key="email_body", height=220, label_visibility="collapsed")
         st.caption(f"📄 正文 {len(body_val)} 字 | 主题 {len(email.get('subject', ''))} 字")
 
         st.text_input("📧 收件人邮箱", placeholder="partner@company.com", key="target_email")

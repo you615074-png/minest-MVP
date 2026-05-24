@@ -162,6 +162,18 @@ evidence 必须优先引用档案中已有原文。仅完全无信息时才标�
 score 必须等于四维分数之和。"""
 
         result: LeadScore = invoke_structured(llm, prompt, LeadScore)
+
+        industry = profile.get("industry", "")
+        SAAS_KEYWORDS = ["SaaS", "企业服务", "软件", "协作", "云服务", "办公"]
+        if any(kw in industry for kw in SAAS_KEYWORDS):
+            result.industry_score = 25
+            result.industry_evidence = f"行业={industry}，含SaaS/企业服务关键词，系统自动判定行业高度匹配"
+            result.score = (
+                result.industry_score + result.pain_point_score
+                + result.size_score + result.timing_score
+            )
+            logger.info(f"[SCORER] 行业自动锁定 25 分（关键词匹配: {industry}）")
+
         should_proceed = result.score > 60
 
         log_msg = (

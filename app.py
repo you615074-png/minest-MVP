@@ -164,23 +164,27 @@ with st.sidebar:
                             st.success("✅ 邮件配置已保存")
             with col_test:
                 if st.button("📤 测试发送", use_container_width=True, help="发送测试邮件到你的邮箱"):
-                    if not cfg and preset == "其他" and not smtp_host:
-                        st.error("请先保存配置")
+                    from utils.mailer import send_email
+                    h = auto_host if preset != "其他" else smtp_host
+                    p = auto_port if preset != "其他" else smtp_port
+                    u = smtp_user
+                    if smtp_pass:
+                        pw = smtp_pass
+                    elif cfg:
+                        pw = decrypt(cfg["smtp_pass_encrypted"], cfg["smtp_pass_salt"], uid)
                     else:
-                        from utils.mailer import send_email
-                        h = auto_host if preset != "其他" else (cfg["smtp_host"] if cfg else smtp_host)
-                        p = auto_port if preset != "其他" else (cfg["smtp_port"] if cfg else smtp_port)
-                        u = cfg["smtp_user"] if cfg else smtp_user
-                        pw = decrypt(cfg["smtp_pass_encrypted"], cfg["smtp_pass_salt"], uid) if cfg else smtp_pass
-                        n = cfg["sender_name"] if cfg else sender_name
-                        if not pw:
-                            st.error("请先保存配置")
+                        pw = None
+                    n = sender_name
+                    if not u or not pw:
+                        st.error("请填写邮箱账号和授权码")
+                    elif not h:
+                        st.error("请选择邮箱提供商或填写 SMTP 服务器")
+                    else:
+                        ok, msg = send_email(u, "AI SDR 测试邮件", "这是一封来自 AI SDR 数字团队的测试邮件，配置正确即可收到。", "", h, p, u, pw, n)
+                        if ok:
+                            st.success(msg)
                         else:
-                            ok, msg = send_email(u, "AI SDR 测试邮件", "这是一封来自 AI SDR 数字团队的测试邮件，配置正确即可收到。", "", h, p, u, pw, n)
-                            if ok:
-                                st.success(msg)
-                            else:
-                                st.error(msg)
+                            st.error(msg)
             with col_del:
                 if st.button("🗑", key="del_ec", help="删除配置"):
                     delete_email_config(uid)
