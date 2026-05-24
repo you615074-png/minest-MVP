@@ -297,6 +297,7 @@ with left_col.container(height=800, border=False):
             else:
                 st.session_state.is_running = True
                 st.session_state.current_result = None
+                st.session_state._prefill_done = False
                 st.session_state.thread_id = str(uuid.uuid4())
                 st.session_state.run_args = {
                     "product_desc": product_desc[:2000],
@@ -309,6 +310,7 @@ with left_col.container(height=800, border=False):
 
     with tab_batch:
         st.info("批量处理会自动遍历名单，提取官网进行分析。最大 2MB，最多 50 行。")
+        st.download_button("📥 下载 CSV 模板", data="url\nhttps://www.feishu.cn\nhttps://www.deepseek.com\n", file_name="batch_template.csv", mime="text/csv", key="csv_tpl")
         uploaded_file = st.file_uploader(
             "上传包含 'url' 或 '网址' 列的文件",
             type=["csv", "xlsx"],

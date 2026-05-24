@@ -111,8 +111,12 @@ def _render_sdr_result(result: dict):
             st.session_state.email_body = redact_secrets(body_val)
             st.session_state._email_dirty = True
 
-        st.markdown(section_title("📝 邮件正文"), unsafe_allow_html=True)
+        st.markdown("<br>" + section_title("📝 邮件正文"), unsafe_allow_html=True)
         body_display = st.session_state.get("email_body", body_val)
+
+        copy_html = f'<div style="margin-bottom:8px;"><button onclick="navigator.clipboard.writeText(`{body_display}`)" style="background:#30363d;border:1px solid #484f58;color:#c9d1d9;border-radius:6px;padding:4px 12px;cursor:pointer;font-size:12px;">📋 复制正文</button></div>'
+        st.markdown(copy_html, unsafe_allow_html=True)
+
         st.markdown(
             f"<div style='background:#161b22;border:1px solid #30363d;border-radius:10px;"
             f"padding:16px 20px;line-height:1.9;color:#e0e7ef;font-size:14px;"
