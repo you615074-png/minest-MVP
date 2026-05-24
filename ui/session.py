@@ -30,8 +30,8 @@ def get_user() -> dict | None:
 def set_user(user: dict | None):
     st.session_state.current_user = user
     st.session_state.current_result = None
-    st.session_state._email_dirty = False
     st.session_state._prefill_done = False
+    st.session_state._last_email_fp = None
 
 
 def clear_user():

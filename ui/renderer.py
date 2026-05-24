@@ -105,11 +105,12 @@ def _render_sdr_result(result: dict):
         st.text_input("📌 邮件主题", key="email_subject")
 
         body_val = email.get("body", "")
-        if not st.session_state.get("_email_dirty", False):
+        result_fingerprint = hash(repr(result.get("email_draft", {})))
+        if st.session_state.get("_last_email_fp") != result_fingerprint:
             if not body_val or len(body_val.strip()) < 5:
                 body_val = "（开发信正文生成异常，请联系管理员）"
             st.session_state.email_body = redact_secrets(body_val)
-            st.session_state._email_dirty = True
+            st.session_state._last_email_fp = result_fingerprint
 
         st.markdown(section_title("📝 邮件正文"), unsafe_allow_html=True)
         st.text_area("编辑邮件正文", key="email_body", height=180, label_visibility="collapsed")
