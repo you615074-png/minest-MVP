@@ -108,14 +108,24 @@ def _render_sdr_result(result: dict):
         st.text_input("📌 邮件主题", value=redact_secrets(email.get("subject", "")), key="email_subject")
 
         st.markdown(section_title("📝 邮件正文"), unsafe_allow_html=True)
-        result_fingerprint = hash(repr(result))
-        st.text_area(
-            "邮件正文内容",
-            value=redact_secrets(body_val),
-            key=f"body_display_{result_fingerprint}",
-            height=180,
-            label_visibility="collapsed",
-        )
+        st.code(body_val, language=None)
+        with st.expander("✏️ 编辑正文（直接修改后点确定）"):
+            edited = st.text_area(
+                "编辑",
+                value=body_val,
+                key=f"edit_{hash(body_val)}",
+                height=180,
+                label_visibility="collapsed",
+            )
+            if edited and edited != body_val:
+                c1, c2 = st.columns([1, 3])
+                with c1:
+                    if st.button("✅ 确认修改", key=f"apply_{hash(body_val)}"):
+                        result["email_draft"]["body"] = edited
+                        body_val = edited
+                        st.rerun()
+                with c2:
+                    st.caption("点击确认后正文将更新")
         st.caption(f"📄 正文 {len(body_val)} 字 | 主题 {len(email.get('subject', ''))} 字")
 
         st.text_input("📧 收件人邮箱", value=result.get("target_email", ""), placeholder="partner@company.com", key="target_email")
