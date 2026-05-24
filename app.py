@@ -230,6 +230,7 @@ with left_col.container(height=800, border=False):
             st.session_state.icp_definition = "中大型企业，50-1000 人，有跨部门协作需求"
             st.session_state.target_url = "https://www.feishu.cn"
             st.session_state._prefill_done = True
+            st.session_state._email_dirty = False
             st.session_state._viewing_history = False
             st.rerun()
     with prefill_col2:
@@ -239,6 +240,7 @@ with left_col.container(height=800, border=False):
             st.session_state.icp_definition = "跨境电商卖家，年 GMV 100 万美元以上"
             st.session_state.target_url = "https://www.bilibili.com"
             st.session_state._prefill_done = True
+            st.session_state._email_dirty = False
             st.session_state._viewing_history = False
             st.rerun()
     if st.session_state.get("_prefill_done"):
@@ -271,7 +273,7 @@ with left_col.container(height=800, border=False):
         )
 
     with st.expander("✏️ 邮件风格", expanded=False):
-        st_style = st.session_state.get("_email_style", {"tone": "亲切", "length": "150", "opening": "动态", "cta": "电话"})
+        st_style = st.session_state.get("_email_style", {"tone": "真诚亲切", "length": "100-200字", "opening": "引用近期动态", "cta": "约15分钟通话"})
         tone = st.selectbox("语气", ["真诚亲切", "专业正式", "简洁直接"], index=["真诚亲切", "专业正式", "简洁直接"].index(st_style.get("tone", "真诚亲切")), key="es_tone", disabled=viewing)
         length = st.selectbox("长度", ["100-200字", "50-100字", "200-300字"], index=["100-200字", "50-100字", "200-300字"].index(st_style.get("length", "100-200字")), key="es_len", disabled=viewing)
         opening = st.selectbox("开头方式", ["引用近期动态", "直接切入痛点", "赞美对方成就"], index=["引用近期动态", "直接切入痛点", "赞美对方成就"].index(st_style.get("opening", "引用近期动态")), key="es_open", disabled=viewing)
@@ -374,6 +376,7 @@ with left_col.container(height=800, border=False):
                         else:
                             st.session_state.is_running = True
                             st.session_state.current_result = None
+                            st.session_state._prefill_done = False
                             st.session_state.thread_id = str(uuid.uuid4())
                             st.session_state.run_args = {
                                 "product_desc": product_desc[:2000],
@@ -381,6 +384,7 @@ with left_col.container(height=800, border=False):
                                 "target_urls": valid_urls,
                                 "target_emails": emails[:len(valid_urls)] if emails else [],
                                 "language": output_lang,
+                                "email_style": st.session_state.get("_email_style", {}),
                                 "batch_mode": True,
                             }
                             st.rerun()
