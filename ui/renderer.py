@@ -117,10 +117,6 @@ def _render_sdr_result(result: dict):
         )
         st.caption(f"📄 正文 {len(body_val)} 字 | 主题 {len(email.get('subject', ''))} 字")
 
-        st.markdown(section_title("📝 邮件正文"), unsafe_allow_html=True)
-        st.text_area("编辑邮件正文", key="email_body", height=180, label_visibility="collapsed")
-        st.caption(f"📄 正文 {len(body_val)} 字 | 主题 {len(email.get('subject', ''))} 字")
-
         st.text_input("📧 收件人邮箱", value=result.get("target_email", ""), placeholder="partner@company.com", key="target_email")
 
         email_cfg = get_email_config(st.session_state.current_user["id"]) if st.session_state.current_user else None
