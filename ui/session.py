@@ -9,6 +9,7 @@ SESSION_KEYS = {
     "current_result": None,
     "is_running": False,
     "current_user": None,
+    "_email_style": {"tone": "真诚亲切", "length": "100-200字", "opening": "引用近期动态", "cta": "约15分钟通话"},
 }
 
 
