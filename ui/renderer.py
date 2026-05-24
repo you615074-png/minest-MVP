@@ -108,10 +108,11 @@ def _render_sdr_result(result: dict):
         st.text_input("📌 邮件主题", value=redact_secrets(email.get("subject", "")), key="email_subject")
 
         st.markdown(section_title("📝 邮件正文"), unsafe_allow_html=True)
+        result_fingerprint = hash(repr(result))
         st.text_area(
             "邮件正文内容",
-            value=redact_secrets(st.session_state.get("_saved_body", body_val)),
-            key=f"email_body",
+            value=redact_secrets(body_val),
+            key=f"body_display_{result_fingerprint}",
             height=180,
             label_visibility="collapsed",
         )

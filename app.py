@@ -1,4 +1,5 @@
 import uuid
+import time
 import pandas as pd
 import streamlit as st
 from dotenv import load_dotenv
@@ -71,6 +72,9 @@ with st.sidebar:
                 st.caption("暂无记录，快去生成第一条分析吧！")
             else:
                 st.caption(f"共 {len(records)} 条记录 (最多保留50条)")
+                if len(records) > 1:
+                    st.caption("勾选多条记录后可批量导出")
+                selected_ids = []
                 for r in records:
                     mode = r.get("mode")
                     date_str = r.get("created_at")[:16]
@@ -86,7 +90,10 @@ with st.sidebar:
 
                     st.markdown(history_item(icon, title, date_str), unsafe_allow_html=True)
 
-                    col_view, col_del = st.columns([2, 1])
+                    col_chk, col_view, col_del = st.columns([0.5, 2, 0.8])
+                    with col_chk:
+                        if st.checkbox("", key=f"chk_{r['id']}", label_visibility="collapsed"):
+                            selected_ids.append(r["id"])
                     with col_view:
                         if st.button("查看详情", key=f"btn_{r['id']}", use_container_width=True):
                             st.session_state.current_result = r.get("full_result")
@@ -101,6 +108,28 @@ with st.sidebar:
                         if st.button("🗑", key=f"del_{r['id']}", help="删除此记录"):
                             delete_history(r["id"], uid)
                             st.rerun()
+
+                # 批量导出
+                selected = [r for r in records if st.session_state.get(f"chk_{r['id']}", False)]
+                if selected:
+                    combined = "# AI SDR 批量分析报告\n\n"
+                    for r in selected:
+                        fr = r.get("full_result", {})
+                        score = fr.get("lead_score", 0)
+                        comp = fr.get("company_profile", {}).get("company_name", "未知")
+                        combined += f"## {comp} (评分: {score}/100)\n\n"
+                        combined += f"- 行业: {fr.get('company_profile', {}).get('industry', '-')}\n"
+                        combined += f"- 评分依据: {fr.get('score_rationale', '-')}\n"
+                        if fr.get("email_draft", {}).get("body"):
+                            combined += f"- 开发信: {fr['email_draft']['body'][:100]}...\n"
+                        combined += "\n---\n\n"
+                    st.download_button(
+                        f"📥 导出选中 {len(selected)} 条",
+                        data=combined.encode("utf-8"),
+                        file_name=f"SDR_Batch_{int(time.time())}.md",
+                        mime="text/markdown",
+                        use_container_width=True,
+                    )
 
     st.divider()
     with st.expander("📧 邮件发送配置"):
