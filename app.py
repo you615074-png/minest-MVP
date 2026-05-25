@@ -7,7 +7,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from utils.db import init_db, get_user_history, search_user_history, delete_history, get_email_config, save_email_config, delete_email_config, get_email_logs
+from utils.db import init_db, get_user_history, search_user_history, delete_history, get_email_config, save_email_config, delete_email_config
+try:
+    from utils.db import get_email_logs
+except ImportError:
+    get_email_logs = lambda *a, **kw: []
 from utils.auth import register_user, authenticate_user, change_password
 from utils.encrypt import encrypt, decrypt
 from utils.validator import validate_config

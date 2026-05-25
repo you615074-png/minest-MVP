@@ -8,7 +8,11 @@ from ui.components import (
 )
 from utils.secrets import redact_secrets
 from utils.mailer import send_email
-from utils.db import get_email_config, save_email_log
+from utils.db import get_email_config
+try:
+    from utils.db import save_email_log
+except ImportError:
+    save_email_log = lambda *a, **kw: None
 from utils.encrypt import decrypt
 from core.agents.scorer import scorer_node
 from core.agents.copywriter import copywriter_node
