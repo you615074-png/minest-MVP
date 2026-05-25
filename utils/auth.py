@@ -122,3 +122,25 @@ def authenticate_user(username: str, password: str) -> tuple[bool, str, dict]:
 
             conn.commit()
             return False, msg, {}
+
+
+def change_password(user_id: str, old_password: str, new_password: str) -> tuple[bool, str]:
+    if not user_id or not old_password or not new_password:
+        return False, "所有字段均为必填"
+    if len(new_password) < 6:
+        return False, "新密码至少6位"
+
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT password_hash FROM users WHERE id = ?", (user_id,))
+        row = cursor.fetchone()
+        if not row:
+            return False, "用户不存在"
+
+        if not check_password(old_password, row["password_hash"]):
+            return False, "旧密码错误"
+
+        new_hash = hash_password(new_password)
+        cursor.execute("UPDATE users SET password_hash = ? WHERE id = ?", (new_hash, user_id))
+        conn.commit()
+        return True, "密码修改成功"

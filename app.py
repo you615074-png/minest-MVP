@@ -1,12 +1,14 @@
 import uuid
 import time
+import json
 import pandas as pd
 import streamlit as st
 from dotenv import load_dotenv
 
 load_dotenv()
 
-from utils.db import init_db, get_user_history, search_user_history, delete_history, get_email_config, save_email_config, delete_email_config
+from utils.db import init_db, get_user_history, search_user_history, delete_history, get_email_config, save_email_config, delete_email_config, get_email_logs
+from utils.auth import register_user, authenticate_user, change_password
 from utils.encrypt import encrypt, decrypt
 from utils.validator import validate_config
 from ui.styles import CSS_GLOBAL
@@ -190,7 +192,8 @@ with st.sidebar:
                             st.error("无法获取授权码，请重新输入")
                         else:
                             enc_pw, salt = encrypt(final_pass, uid)
-                            save_email_config(uid, final_host, final_port, smtp_user, enc_pw, salt, sender_name)
+                            style_json = json.dumps(st.session_state.get("_email_style", {}), ensure_ascii=False)
+                            save_email_config(uid, final_host, final_port, smtp_user, enc_pw, salt, sender_name, style_json)
                             st.success("✅ 邮件配置已保存")
                             st.rerun()
             with col_test:
@@ -229,6 +232,29 @@ with st.sidebar:
         except Exception:
             st.caption("DB: ❌")
         st.caption("LLM: 启动校验已通过")
+
+    if is_authenticated():
+        st.divider()
+        with st.expander("🔑 修改密码"):
+            uid_pw = st.session_state.current_user["id"]
+            old_pw = st.text_input("旧密码", type="password", key="chg_old")
+            new_pw = st.text_input("新密码（至少6位）", type="password", key="chg_new")
+            if st.button("确认修改密码", use_container_width=True):
+                ok, msg = change_password(uid_pw, old_pw, new_pw)
+                if ok:
+                    st.success(msg)
+                else:
+                    st.error(msg)
+
+        st.divider()
+        with st.expander("📬 发送记录"):
+            email_logs_data = get_email_logs(uid_pw)
+            if not email_logs_data:
+                st.caption("暂无发送记录")
+            else:
+                for log in email_logs_data:
+                    icon = "✅" if log["result"] == "success" else "❌"
+                    st.caption(f"{icon} {log['sent_at'][:16]} → {log['to_email']} | {log['subject'][:20]}...")
         if hasattr(st.session_state, "is_running"):
             st.caption(f"运行状态: {'🏃 工作中' if st.session_state.is_running else '⏸ 空闲'}")
 

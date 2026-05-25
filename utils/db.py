@@ -86,21 +86,59 @@ def init_db():
             )
         ''')
 
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS email_logs (
+                id TEXT PRIMARY KEY,
+                user_id TEXT,
+                sent_at TIMESTAMP,
+                to_email TEXT,
+                subject TEXT,
+                body_preview TEXT,
+                result TEXT,
+                error_msg TEXT,
+                FOREIGN KEY(user_id) REFERENCES users(id)
+            )
+        ''')
+
         conn.commit()
+
+
+def save_email_log(user_id: str, to_email: str, subject: str, body: str, result: str, error_msg: str = ""):
+    if not user_id:
+        return
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO email_logs (id, user_id, sent_at, to_email, subject, body_preview, result, error_msg)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (str(uuid.uuid4()), user_id, datetime.now(), to_email, subject,
+              body[:80] if body else "", result, error_msg))
+        conn.commit()
+
+
+def get_email_logs(user_id: str, limit: int = 20) -> list:
+    if not user_id:
+        return []
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id, sent_at, to_email, subject, result, error_msg FROM email_logs "
+            "WHERE user_id = ? ORDER BY sent_at DESC LIMIT ?", (user_id, limit))
+        return [dict(r) for r in cursor.fetchall()]
 
 
 def save_email_config(user_id: str, smtp_host: str, smtp_port: int,
                       smtp_user: str, pass_encrypted: str, pass_salt: str,
-                      sender_name: str):
+                      sender_name: str, style_json: str = "{}"):
     if not user_id:
         return
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute('''
             INSERT OR REPLACE INTO email_configs
-                (user_id, smtp_host, smtp_port, smtp_user, smtp_pass_encrypted, smtp_pass_salt, sender_name)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        ''', (user_id, smtp_host, smtp_port, smtp_user, pass_encrypted, pass_salt, sender_name))
+                (user_id, smtp_host, smtp_port, smtp_user, smtp_pass_encrypted, smtp_pass_salt, sender_name, style_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (user_id, smtp_host, smtp_port, smtp_user, pass_encrypted, pass_salt, sender_name, style_json))
         conn.commit()
 
 
@@ -110,8 +148,8 @@ def get_email_config(user_id: str) -> dict | None:
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT smtp_host, smtp_port, smtp_user, smtp_pass_encrypted, smtp_pass_salt, sender_name "
-            "FROM email_configs WHERE user_id = ?",
+            "SELECT smtp_host, smtp_port, smtp_user, smtp_pass_encrypted, smtp_pass_salt, sender_name, "
+            "COALESCE(style_json, '{}') as style_json FROM email_configs WHERE user_id = ?",
             (user_id,)
         )
         row = cursor.fetchone()
@@ -124,6 +162,7 @@ def get_email_config(user_id: str) -> dict | None:
             "smtp_pass_encrypted": row["smtp_pass_encrypted"],
             "smtp_pass_salt": row["smtp_pass_salt"],
             "sender_name": row["sender_name"],
+            "style_json": row["style_json"],
         }
 
 

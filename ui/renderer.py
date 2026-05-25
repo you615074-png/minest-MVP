@@ -8,8 +8,10 @@ from ui.components import (
 )
 from utils.secrets import redact_secrets
 from utils.mailer import send_email
-from utils.db import get_email_config
+from utils.db import get_email_config, save_email_log
 from utils.encrypt import decrypt
+from core.agents.scorer import scorer_node
+from core.agents.copywriter import copywriter_node
 
 
 def render_result(result: dict):
@@ -92,6 +94,19 @@ def _render_sdr_result(result: dict):
         st.progress(score / 100)
         st.caption(f"📝 {result.get('score_rationale', '')}")
 
+        if not st.session_state.get("is_running"):
+            col_regen_s, col_regen_c = st.columns(2)
+            with col_regen_s:
+                if st.button("🔄 重新评分", use_container_width=True, key=f"regen_scorer"):
+                    new_state = scorer_node(result)
+                    st.session_state.current_result = new_state
+                    st.rerun()
+            with col_regen_c:
+                if st.button("🔄 重新生成开发信", use_container_width=True, key=f"regen_copywriter"):
+                    new_state = copywriter_node(result)
+                    st.session_state.current_result = new_state
+                    st.rerun()
+
         hooks = result.get("key_hooks", [])
         if hooks:
             st.markdown(f"**核心切入点：**<br>{hook_tags(hooks)}", unsafe_allow_html=True)
@@ -156,9 +171,13 @@ def _render_sdr_result(result: dict):
                     email_cfg["sender_name"],
                 )
                 if ok:
+                    save_email_log(st.session_state.current_user["id"], to_email,
+                                   email.get("subject", ""), email.get("body", ""), "success")
                     st.balloons()
                     st.success(msg)
                 else:
+                    save_email_log(st.session_state.current_user["id"], to_email,
+                                   email.get("subject", ""), email.get("body", ""), "failed", msg)
                     st.error(msg)
 
         if send_disabled:
