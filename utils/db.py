@@ -82,9 +82,15 @@ def init_db():
                 smtp_pass_encrypted TEXT NOT NULL DEFAULT '',
                 smtp_pass_salt TEXT NOT NULL DEFAULT '',
                 sender_name TEXT NOT NULL DEFAULT 'AI SDR',
+                style_json TEXT NOT NULL DEFAULT '{}',
                 FOREIGN KEY(user_id) REFERENCES users(id)
             )
         ''')
+
+        try:
+            cursor.execute("SELECT style_json FROM email_configs LIMIT 1")
+        except sqlite3.OperationalError:
+            cursor.execute("ALTER TABLE email_configs ADD COLUMN style_json TEXT NOT NULL DEFAULT '{}'")
 
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS email_logs (
@@ -147,11 +153,18 @@ def get_email_config(user_id: str) -> dict | None:
         return None
     with get_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute(
-            "SELECT smtp_host, smtp_port, smtp_user, smtp_pass_encrypted, smtp_pass_salt, sender_name, "
-            "COALESCE(style_json, '{}') as style_json FROM email_configs WHERE user_id = ?",
-            (user_id,)
-        )
+        try:
+            cursor.execute(
+                "SELECT smtp_host, smtp_port, smtp_user, smtp_pass_encrypted, smtp_pass_salt, sender_name, "
+                "COALESCE(style_json, '{}') as style_json FROM email_configs WHERE user_id = ?",
+                (user_id,)
+            )
+        except sqlite3.OperationalError:
+            cursor.execute(
+                "SELECT smtp_host, smtp_port, smtp_user, smtp_pass_encrypted, smtp_pass_salt, sender_name "
+                "FROM email_configs WHERE user_id = ?",
+                (user_id,)
+            )
         row = cursor.fetchone()
         if not row:
             return None
@@ -162,7 +175,7 @@ def get_email_config(user_id: str) -> dict | None:
             "smtp_pass_encrypted": row["smtp_pass_encrypted"],
             "smtp_pass_salt": row["smtp_pass_salt"],
             "sender_name": row["sender_name"],
-            "style_json": row["style_json"],
+            "style_json": row["style_json"] if "style_json" in row.keys() else "{}",
         }
 
 
