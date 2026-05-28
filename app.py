@@ -273,7 +273,7 @@ with left_col.container(height=800, border=False):
     viewing = st.session_state.get("_viewing_history", False)
     locked = viewing or st.session_state.is_running
     if st.session_state.is_running:
-        st.info("⏳ AI 团队工作中，左侧配置已锁定")
+        st.info("⏳ AI 团队工作中，输入已锁定")
     elif viewing:
         st.info("📋 正在查看历史记录 — 输入已锁定")
         if st.button("🆕 开启新分析", type="primary", use_container_width=True):
@@ -366,7 +366,6 @@ with left_col.container(height=800, border=False):
             else:
                 st.session_state.is_running = True
                 st.session_state.current_result = None
-                st.session_state._viewing_history = False
                 st.session_state._prefill_done = False
                 st.session_state.thread_id = str(uuid.uuid4())
                 st.session_state.run_args = {
@@ -435,7 +434,6 @@ with left_col.container(height=800, border=False):
                         else:
                             st.session_state.is_running = True
                             st.session_state.current_result = None
-                            st.session_state._viewing_history = False
                             st.session_state._prefill_done = False
                             st.session_state.thread_id = str(uuid.uuid4())
                             st.session_state.run_args = {
