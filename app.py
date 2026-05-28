@@ -69,50 +69,51 @@ with st.sidebar:
         uid = st.session_state.current_user["id"]
 
         if st.session_state.is_running:
-            st.caption("⏳ 新分析运行中，完成后将自动显示在下方")
-        search_kw = st.text_input("搜索历史", placeholder="输入关键词...", key="hist_search", disabled=st.session_state.is_running)
-        records = search_user_history(uid, search_kw) if search_kw else get_user_history(uid)
-
-        if not records:
-            st.caption("暂无记录，快去生成第一条分析吧！")
+            st.warning("⏳ 任务运行中，历史暂不可用")
         else:
-            st.caption(f"共 {len(records)} 条记录 (最多保留50条)")
-            if len(records) > 1:
-                st.caption("勾选多条记录后可批量导出")
-            selected_ids = []
-            for r in records:
-                mode = r.get("mode")
-                date_str = r.get("created_at")[:16]
+            search_kw = st.text_input("搜索历史", placeholder="输入关键词...", key="hist_search")
+            records = search_user_history(uid, search_kw) if search_kw else get_user_history(uid)
 
-                if mode == "MARKET_ANALYSIS":
-                    icon = "🎯"
-                    title = "受众分析"
-                else:
-                    score = r.get("full_result", {}).get("lead_score", 0)
-                    icon = "🟢" if score > 60 else ("🔴" if score > 0 else "⚪")
-                    comp = r.get("full_result", {}).get("company_profile", {}).get("company_name", "未知")
-                    title = f"{comp}"
+            if not records:
+                st.caption("暂无记录，快去生成第一条分析吧！")
+            else:
+                st.caption(f"共 {len(records)} 条记录 (最多保留50条)")
+                if len(records) > 1:
+                    st.caption("勾选多条记录后可批量导出")
+                selected_ids = []
+                for r in records:
+                    mode = r.get("mode")
+                    date_str = r.get("created_at")[:16]
 
-                st.markdown(history_item(icon, title, date_str), unsafe_allow_html=True)
+                    if mode == "MARKET_ANALYSIS":
+                        icon = "🎯"
+                        title = "受众分析"
+                    else:
+                        score = r.get("full_result", {}).get("lead_score", 0)
+                        icon = "🟢" if score > 60 else ("🔴" if score > 0 else "⚪")
+                        comp = r.get("full_result", {}).get("company_profile", {}).get("company_name", "未知")
+                        title = f"{comp}"
 
-                col_chk, col_view, col_del = st.columns([0.5, 2, 0.8])
-                with col_chk:
-                    if st.checkbox("", key=f"chk_{r['id']}", label_visibility="collapsed"):
-                        selected_ids.append(r["id"])
-                with col_view:
-                    if st.button("查看详情", key=f"btn_{r['id']}", use_container_width=True):
-                        st.session_state.current_result = r.get("full_result")
-                        fr = r.get("full_result", {})
-                        st.session_state.product_desc = fr.get("product_desc", "")
-                        st.session_state.icp_definition = fr.get("icp_definition", "")
-                        st.session_state.target_url = fr.get("target_url", "")
-                        st.session_state.output_lang = fr.get("language", "简体中文")
-                        st.session_state._viewing_history = True
-                        st.rerun()
-                with col_del:
-                    if st.button("🗑", key=f"del_{r['id']}", help="删除此记录"):
-                        delete_history(r["id"], uid)
-                        st.rerun()
+                    st.markdown(history_item(icon, title, date_str), unsafe_allow_html=True)
+
+                    col_chk, col_view, col_del = st.columns([0.5, 2, 0.8])
+                    with col_chk:
+                        if st.checkbox("", key=f"chk_{r['id']}", label_visibility="collapsed"):
+                            selected_ids.append(r["id"])
+                    with col_view:
+                        if st.button("查看详情", key=f"btn_{r['id']}", use_container_width=True):
+                            st.session_state.current_result = r.get("full_result")
+                            fr = r.get("full_result", {})
+                            st.session_state.product_desc = fr.get("product_desc", "")
+                            st.session_state.icp_definition = fr.get("icp_definition", "")
+                            st.session_state.target_url = fr.get("target_url", "")
+                            st.session_state.output_lang = fr.get("language", "简体中文")
+                            st.session_state._viewing_history = True
+                            st.rerun()
+                    with col_del:
+                        if st.button("🗑", key=f"del_{r['id']}", help="删除此记录"):
+                            delete_history(r["id"], uid)
+                            st.rerun()
 
                 # 批量导出
                 selected = [r for r in records if st.session_state.get(f"chk_{r['id']}", False)]
